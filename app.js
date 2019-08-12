@@ -1,19 +1,80 @@
-var express    = require('express')
-var request    = require('request')
-var bodyParser = require('body-parser')
-var Cookies    = require('cookies')
-var multer     = require('multer')
+const express    = require('express');
+const request    = require('request');
+const bodyParser = require('body-parser');
+const Cookies    = require('cookies');
+const multer     = require('multer');
 
-var app = express()
-var router = express.Router()
+const app = express();
+const router = express.Router();
+
+const storage = multer.memoryStorage();
+
+const NONCE_LEN = 30;
+const tempDB = {};
+
+const generateNonce = () => {
+  let nonce = '';
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < NONCE_LEN; i++) {
+    nonce += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return nonce;
+}
+
+const saveToken = async (pubKey, token) => {
+  // Temp function, hit db
+  return;
+}
+
+const generateToken = async (pubKey) => {
+  // Temp function, async to hit db
+  let token = '';
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < NONCE_LEN; i++) {
+    token += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  await saveToken(pubKey, token);
+  return token;
+}
+
+const getNonceTimer = (pubKey) => {
+  setTimeout(() => {
+    // 2 minute nonce timeout for temp db
+    if (tempDB[pubKey]) {
+      delete tempDB[pubKey];
+    }
+  }, 12000);
+}
+
+const getOrCreateNonce = (pubKey) => {
+  if (!tempDB[pubKey]) {
+    tempDB[pubKey] = {
+      nonce: generateNonce(),
+      timer: getNonceTimer(),
+    }
+    console.log(`New nonce: ${tempDB[pubKey].nonce}`);
+  } else {
+    clearTimeout(tempDB[pubKey].timer);
+    tempDB[pubKey].timer = getNonceTimer();
+    console.log(`Second nonce: ${tempDB[pubKey].nonce}`);
+  }
+  return tempDB[pubKey].nonce;
+}
+
+const validSignature = (pubKey, signature) => {
+  const nonce = getOrCreateNonce(pubKey);
+  // Check sig
+  console.log(`Signature valid: ${signature}`);
+  return true;
+}
 
 /** need this for POST parsing */
-app.use(bodyParser.json())
+app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({
   extended: true
-}))
+}));
 
-app.all('/*', function(req, res, next){
+app.all('/*', (req, res, next) => {
   res.start=new Date().getTime();
   origin = req.get('Origin') || '*';
   res.set('Access-Control-Allow-Origin', origin);
@@ -22,8 +83,8 @@ app.all('/*', function(req, res, next){
   res.set('Access-Control-Allow-Credentials', 'true');
   res.set('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization'); // add the list of headers your site allows.
   if (req.method === 'OPTIONS') {
-    var ts=new Date().getTime();
-    var diff = ts-res.start
+    const ts = new Date().getTime();
+    const diff = ts-res.start;
     if (diff > 100) {
       console.log('app.js - OPTIONS requests served in', (diff)+'ms', req.path);
     }
@@ -32,99 +93,38 @@ app.all('/*', function(req, res, next){
   next();
 });
 
-var storage = multer.memoryStorage()
-var upload = multer({ storage: storage, limits: {fileSize: 100*1024*1024} });
-
-app.use(upload.single('content'))
-
-app.use(function (req, res, next) {
-  req.cookies = new Cookies(req, res)
-  res.path = req.path
-
-  if (req.get('Authorization') || req.query.access_token) {
-    if (req.query.access_token) {
-      //console.log('app.js - Authquery',req.query.access_token);
-      req.token=req.query.access_token;
-    } else {
-      //console.log('authheader');
-      if (req.get('Authorization')) {
-        req.token=req.get('Authorization').replace(/Bearer /i, '');
-        req.query.access_token = req.token // just make a querystring for now
-      }
-    }
+app.post('/loki/v1/startRegistration', (req, res) => {
+  const { pubKey } = req.body;
+  if (!pubKey) {
+    console.log('startRegistration arguments missing');
+    res.status(422).end('PubKey missing');
   }
+  const nonce = getOrCreateNonce(pubKey);
+  res.status(200).type('application/json').end(JSON.stringify({ nonce }));
+});
 
-  // only one cookie we care about
-  console.log('proxying', req.method, req.path, req.query, req.cookies.get('altapi'), 'from', req.connection.remoteAddress)
-  if (req.file) {
-    console.log('POSTfiles - file upload got', req.file.buffer.length, 'bytes')
+app.post('/loki/v1/submitRegistration', async (req, res) => {
+  const { pubKey, signature } = req.body;
+  if (!pubKey || !signature) {
+    console.log('submitRegistration arguments missing');
+    res.status(422).end('Arguments missing');
+    return;
   }
-  // proxy
-  var requestSettings = {
-    url: 'http://127.0.0.1:7070' + req.path,
-    method: req.method,
-    qs: req.query,
-    followRedirect: false,
-    forever: true, // keepalive
-    headers: {
-      'x-forwarded-for': req.connection.remoteAddress
-    }
+  if (!validSignature(pubKey, signature)) {
+    const nonce = generateNonce(pubKey);
+    res.status(401).type('application/json').end(JSON.stringify({ nonce }));
+    return;
   }
-  if (req.cookies.get('altapi')) {
-    var j = request.jar()
-    j.setCookie('altapi', req.cookies.get('altapi'))
-    //console.log('setting upstream cookie', req.cookies.get('altapi'))
-    requestSettings.jar = j
-  }
-  if (req.file) {
-    requestSettings.formData = {}
-    requestSettings.formData['content'] = {
-      value: req.file.buffer,
-      options: {
-        filename: req.file.originalname,
-        contentType: req.file.mimetype,
-        knownLength: req.file.buffer.length
-      }
-    }
-    for(var k in req.body) {
-      console.log('fup postData', k, req.body[k])
-      requestSettings.formData[k] = req.body[k]
-    }
-    requestSettings.json = true
-  } else
-  if (Object.keys(req.body).length) {
-    //console.log('body', req.body, typeof(req.body))
-    requestSettings.json = true
-    requestSettings.body = req.body
-  }
-  request(requestSettings, function(err, proxyRes, body) {
-    if (err) console.error('proxy', err)
-    //console.log('upstream headers', proxyRes.headers)
-    if (proxyRes.headers) {
-      // process response headers
-      if (proxyRes.headers['set-cookie']) {
-        //console.log('upstream setting cookies', proxyRes.headers['set-cookie'])
-        for(var i in proxyRes.headers['set-cookie']) {
-          var cookie = proxyRes.headers['set-cookie'][i]
-          var parts = cookie.split(/=/)
-          var key = parts[0]
-          var value = parts[1]
-          console.log('setting downstream cookie', key, '=', value)
-          res.cookie(key, value)
-        }
-      }
-      if (proxyRes.headers['location']) {
-        console.log('redirecting downstream', proxyRes.headers['location'], proxyRes.statusCode)
-        res.writeHead(proxyRes.statusCode, proxyRes.headers)
-      }
-    }
-    //console.log('resBody', body, typeof(body))
-    if (requestSettings.json) {
-      res.end(JSON.stringify(body))
-    } else {
-      res.end(body)
-    }
-  })
-})
+  const token = await generateToken(pubKey);
+  res.status(200).type('application/json').end(JSON.stringify({ token }));
+});
 
-app.listen(8081)
+app.use((req, res, next) => {
+  req.cookies = new Cookies(req, res);
+  res.path = req.path;
+  console.log(res.path);
+  console.log(`Request received: ${res.path}`);
+  next();
+});
+
+app.listen(8081);
