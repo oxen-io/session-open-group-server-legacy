@@ -3,18 +3,17 @@ const request         = require('request');
 const bodyParser      = require('body-parser');
 const Cookies         = require('cookies');
 const multer          = require('multer');
-const sodium          = require('libsodium-wrappers');
 const bb              = require('bytebuffer');
+const libsignal       = require('libsignal');
+const crypto          = require('crypto');
 
 const app = express();
 const router = express.Router();
-
 const storage = multer.memoryStorage();
-
 const tempDB = {};
-
 const cache = require('../sapphire-platform-server/dataaccess.caminte.js');
 const ADN_SCOPES = 'basic stream write_post follow messages update_profile files export';
+const IV_LENGTH = 16;
 
 const getTokenTimer = (pubKey, token) => {
   return setTimeout(() => {
@@ -96,20 +95,33 @@ const confirmToken = async (pubKey, token) => {
 }
 
 const getChallenge = async (pubKey) => {
-  const { publicKey, privateKey } = sodium.crypto_box_keypair();
-  const serverPubKey64 = bb.wrap(publicKey).toString('base64');
+  const serverKey = libsignal.curve.generateKeyPair();
+  const serverPubKey64 = bb.wrap(serverKey.pubKey).toString('base64');
 
-  const userToken = await findOrCreateToken(pubKey);
-  const token = userToken.token;
-  const tokenData = sodium.from_string(token);
+  const pubKeyData = Buffer.from(bb.wrap(pubKey, 'hex').toArrayBuffer());
+  const symKey = libsignal.curve.calculateAgreement(
+    pubKeyData,
+    serverKey.privKey
+  );
 
-  const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
-  const nonce64 = bb.wrap(nonce).toString('base64');
+  const { token } = await findOrCreateToken(pubKey);
+  const tokenData = Buffer.from(bb.wrap(token).toArrayBuffer());
 
-  const pubKeyData = sodium.from_hex(pubKey).slice(1); // Remove messenger leading 05
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const iv64 = bb.wrap(iv).toString('base64');
 
-  const cipherText = sodium.crypto_box_easy(tokenData, nonce, pubKeyData, privateKey);
-  const cipherText64 = bb.wrap(cipherText).toString('base64');
+  const ciphertext = await libsignal.crypto.encrypt(
+    symKey,
+    tokenData,
+    iv
+  );
+  const ivAndCiphertext = new Uint8Array(
+    iv.byteLength + ciphertext.byteLength
+  );
+  ivAndCiphertext.set(new Uint8Array(iv));
+  ivAndCiphertext.set(new Uint8Array(ciphertext), iv.byteLength);
+
+  const cipherText64 = bb.wrap(ivAndCiphertext).toString('base64');
 
   if(!tempDB[pubKey]) {
     tempDB[pubKey] = [];
@@ -121,7 +133,6 @@ const getChallenge = async (pubKey) => {
 
   return {
     cipherText64,
-    nonce64,
     serverPubKey64,
   };
 }
