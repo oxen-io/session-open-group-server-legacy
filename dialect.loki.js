@@ -203,6 +203,26 @@ const getChallenge = async (pubKey) => {
   };
 }
 
+function sendresponse(json, resp) {
+  var ts=new Date().getTime();
+  var diff = ts-resp.start;
+  if (diff > 1000) {
+    // this could be to do the client's connection speed
+    // how because we stop the clock before we send the response...
+    console.log(resp.path+' served in '+(ts-resp.start)+'ms');
+  }
+  if (json.meta.code) {
+    resp.status(json.meta.code);
+  }
+  if (resp.prettyPrint) {
+    json=JSON.stringify(json,null,4);
+  }
+  //resp.set('Content-Type', 'text/javascript');
+  resp.type('application/json');
+  resp.setHeader("Access-Control-Allow-Origin", "*");
+  resp.send(json);
+}
+
 module.exports=function mount(app, prefix) {
   // set cache based on dispatcher object
   cache = app.dispatcher.cache;
@@ -249,5 +269,45 @@ module.exports=function mount(app, prefix) {
       return;
     })
   });
+
+  app.get(prefix + '/loki/v1/user_info', (req, res) => {
+    app.dispatcher.getUserClientByToken(req.token, function(usertoken, err) {
+      if (err) {
+        console.error('token err', err);
+        var resObj={
+          meta: {
+            code: 500,
+            error_message: err
+          }
+        };
+        return sendresponse(resObj, res);
+      }
+      if (usertoken==null) {
+        // could be they didn't log in through a server restart
+        var resObj={
+          meta: {
+            code: 401,
+            error_message: "Call requires authentication: Authentication required to fetch token."
+          }
+        };
+        return sendresponse(resObj, res);
+      }
+      console.log('usertoken',  JSON.stringify(usertoken))
+      var resObj={
+        meta: {
+          code: 200,
+        },
+        data: {
+          user_id: usertoken.userid,
+          client_id: usertoken.client_id,
+          scopes: usertoken.scopes,
+          created_at: usertoken.created_at,
+          expires_at: usertoken.expires_at,
+          moderator_status: false,
+        }
+      };
+      return sendresponse(resObj, res);
+    })
+  })
 
 }
