@@ -34,12 +34,45 @@ app.all('/*', (req, res, next) => {
     }
     return res.sendStatus(200);
   }
+
+  // set req.token
+  if (req.query.access_token) {
+    // passed by querystring
+    req.token=req.query.access_token;
+    if (typeof(req.token) == 'object') {
+      req.token = req.token.filter(function (x, i, a) {
+        return a.indexOf(x) == i;
+      });
+      if (req.token.length == 1) {
+        console.warn('reduced multiple similar access_token params')
+        req.token = req.token[0] // deArray it
+      } else {
+        console.log('multiple access_tokens?!? unique list: ', req.token)
+      }
+    }
+  } else {
+    // passed by header
+    if (req.get('Authorization')) {
+      req.token=req.get('Authorization').replace('Bearer ', '');
+    }
+  }
+
+  // configure response
+  res.prettyPrint=req.get('X-ADN-Pretty-JSON') || 0;
+  // non-ADN spec, ryantharp hack
+  if (req.query.prettyPrint) {
+    res.prettyPrint=1;
+  }
+
   next();
 });
 
 // create a fake dispatcher
 app.dispatcher={
-  cache: cache
+  cache: cache,
+  getUserClientByToken: function(token, cb) {
+    cache.getAPIUserToken(token, cb);
+  }
 };
 const lokiDialectMount = require('./dialect.loki');
 lokiDialectMount(app, '');
