@@ -1,6 +1,8 @@
+const fs        = require('fs');
+const crypto    = require('crypto');
 const bb        = require('bytebuffer');
 const libsignal = require('libsignal');
-const crypto    = require('crypto');
+const ini       = require('loki-launcher/ini')
 
 const SESSION_TTL_MSECS = 120000;
 const TOKEN_TTL_MINS = 60;
@@ -227,6 +229,34 @@ module.exports=function mount(app, prefix) {
   // set cache based on dispatcher object
   cache = app.dispatcher.cache;
 
+  let user_access = {};
+  let pubkey_whitelist = {};
+  if (fs.existsSync('loki.ini')) {
+    const ini_bytes = fs.readFileSync('loki.ini')
+    disk_config = ini.iniToJSON(ini_bytes.toString())
+    console.log('config', disk_config);
+
+    // load globals pubkeys from file and set their access level
+    for(var pubKey in disk_config.globals) {
+      const access = disk_config.globals[pubKey];
+      // translate pubKey to id of user
+      cache.getUserID(pubKey, function(user, err) {
+        //console.log('setting', user.id, 'to', access);
+        user_access[user.id] = access;
+      })
+    }
+  }
+
+  function passesWhitelist(pubKey) {
+    // if we have a whitelist
+    if (disk_config.whitelist && !disk_config.whitelist[pubKey]) {
+      // and you're not on it
+      return false;
+    }
+    // by default everyone is allowed
+    return true;
+  }
+
   app.post(prefix + '/loki/v1/submit_challenge', (req, res) => {
     const { pubKey, token } = req.body;
     if (!pubKey) {
@@ -235,6 +265,12 @@ module.exports=function mount(app, prefix) {
         error: 'pubKey missing',
       }));
       return;
+    }
+    if (!passesWhitelist(pubKey)) {
+      console.log('get_challenge ', pubKey, 'not whitelisted');
+      return res.status(401).type('application/json').end(JSON.stringify({
+        error: 'not allowed',
+      }));
     }
     if (!token) {
       console.log('submit_challenge token missing');
@@ -259,6 +295,14 @@ module.exports=function mount(app, prefix) {
       }));
       return;
     }
+
+    if (!passesWhitelist(pubKey)) {
+      console.log('get_challenge ', pubKey, 'not whitelisted');
+      return res.status(401).type('application/json').end(JSON.stringify({
+        error: 'not allowed',
+      }));
+    }
+
     getChallenge(pubKey).then(keyInfo => {
       res.status(200).type('application/json').end(JSON.stringify(keyInfo));
     }).catch(err => {
@@ -270,11 +314,11 @@ module.exports=function mount(app, prefix) {
     })
   });
 
-  app.get(prefix + '/loki/v1/user_info', (req, res) => {
-    app.dispatcher.getUserClientByToken(req.token, function(usertoken, err) {
+  function validUser(token, resObj, cb) {
+    app.dispatcher.getUserClientByToken(token, function(usertoken, err) {
       if (err) {
         console.error('token err', err);
-        var resObj={
+        const resObj={
           meta: {
             code: 500,
             error_message: err
@@ -284,7 +328,7 @@ module.exports=function mount(app, prefix) {
       }
       if (usertoken==null) {
         // could be they didn't log in through a server restart
-        var resObj={
+        const resObj={
           meta: {
             code: 401,
             error_message: "Call requires authentication: Authentication required to fetch token."
@@ -292,8 +336,34 @@ module.exports=function mount(app, prefix) {
         };
         return sendresponse(resObj, res);
       }
-      console.log('usertoken',  JSON.stringify(usertoken))
-      var resObj={
+      cb()
+    })
+  }
+
+  function validGlobal(token, resObj, cb) {
+    validUser(req.token, res, function(usertoken) {
+      const list = user_access[usertoken.userid]
+      if (!list) {
+        // not even on the list
+        const resObj={
+          meta: {
+            code: 401,
+            error_message: "Call requires authentication: Authentication required to fetch token."
+          }
+        };
+        return sendresponse(resObj, res);
+      }
+      if (list.match(/,/)) {
+        return cb(usertoken, list.split(/,/))
+      }
+      cb(usertoken, true)
+    })
+  }
+
+  app.get(prefix + '/loki/v1/user_info', (req, res) => {
+    validUser(req.token, res, function(usertoken) {
+      //console.log('usertoken',  JSON.stringify(usertoken))
+      const resObj={
         meta: {
           code: 200,
         },
@@ -303,11 +373,95 @@ module.exports=function mount(app, prefix) {
           scopes: usertoken.scopes,
           created_at: usertoken.created_at,
           expires_at: usertoken.expires_at,
-          moderator_status: false,
+          moderator_status: user_access[usertoken.userid],
         }
       };
       return sendresponse(resObj, res);
     })
   })
 
+  app.get(prefix + '/loki/v1/channel/:id/deletes', (req, res) => {
+    const numId = parseInt(req.params.id);
+    //console.log('numId', numId)
+    cache.getChannelDeletions(numId, req.apiParams, function(interactions, err, meta) {
+      //console.log('interactions', interactions)
+      var items = []
+      for(var i in interactions) {
+        items.push({
+          delete_at: interactions[i].datetime,
+          message_id: interactions[i].typeid,
+          id: interactions[i].id
+        })
+      }
+      const resObj={
+        meta: meta,
+        data: items
+      };
+      return sendresponse(resObj, res);
+    })
+  })
+
+  app.delete(prefix + '/loki/v1/moderation/message/:id', (req, res) => {
+    validGlobal(req.token, res, function(usertoken, access_list) {
+      // FIXME: support comma-separate list of IDs
+
+      // get message channel
+      var numId = parseInt(req.params.id);
+      cache.getMessage(numId, function(message, getErr) {
+        // handle errors
+        if (getErr) {
+          console.error('getMessage err', getErr);
+          const resObj={
+            meta: {
+              code: 500,
+              error_message: getErr
+            }
+          };
+          return sendresponse(resObj, res);
+        }
+
+        // if not full access
+        if (access_list !== true) {
+          // see if this message's channel is on the list
+          var allowed = access_list.indexOf(message.channel_id);
+          if (allowed == -1) {
+            // not allowed to manage this channel
+            const resObj={
+              meta: {
+                code: 403,
+                error_message: "You're not allowed to moderation this channel"
+              }
+            };
+            return sendresponse(resObj, res);
+          }
+        }
+
+        // carry out deletion
+        cache.deleteMessage(message.id, function(message, delErr) {
+          // handle errors
+          if (delErr) {
+            console.error('deleteMessage err', delErr);
+            const resObj={
+              meta: {
+                code: 500,
+                error_message: delErr
+              }
+            };
+            return sendresponse(resObj, res);
+          }
+          //console.log('usertoken',  JSON.stringify(usertoken))
+          const resObj={
+            meta: {
+              code: 200,
+            },
+            data: {
+              is_deleted: true
+            }
+          };
+          return sendresponse(resObj, res);
+        })
+      })
+    })
+
+  })
 }
