@@ -57,6 +57,35 @@ app.all('/*', (req, res, next) => {
     }
   }
 
+  // set up paging parameters
+  var pageParams={};
+  pageParams.since_id=false;
+  if (req.query.since_id) {
+    //console.log("Overriding since_id to "+req.query.since_id);
+    pageParams.since_id=parseInt(req.query.since_id);
+  }
+  pageParams.before_id=false;
+  if (req.query.before_id) {
+    //console.log("Overriding before_id to "+req.query.before_id);
+    pageParams.before_id=parseInt(req.query.before_id);
+  }
+  pageParams.count=20;
+  if (req.query.count) {
+    //console.log("Overriding count to "+req.query.count);
+    pageParams.count=Math.min(Math.max(req.query.count, -200), 200);
+  }
+  // stream marker supported endpoints only
+  pageParams.last_read=false;
+  pageParams.last_read_inclusive=false;
+  pageParams.last_marker=false;
+  pageParams.last_marker_inclusive=false;
+
+  // put objects into request
+  req.apiParams={
+    pageParams: pageParams,
+    token: req.token,
+  }
+
   // configure response
   res.prettyPrint=req.get('X-ADN-Pretty-JSON') || 0;
   // non-ADN spec, ryantharp hack
