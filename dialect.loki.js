@@ -326,7 +326,7 @@ module.exports=function mount(app, prefix) {
         };
         return sendresponse(resObj, res);
       }
-      if (usertoken==null) {
+      if (usertoken === null) {
         // could be they didn't log in through a server restart
         const resObj={
           meta: {
@@ -336,7 +336,7 @@ module.exports=function mount(app, prefix) {
         };
         return sendresponse(resObj, res);
       }
-      cb()
+      cb(usertoken)
     })
   }
 
