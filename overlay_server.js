@@ -5,7 +5,6 @@ const bodyParser = require('body-parser');
 
 const app = express();
 
-const tempDB = {};
 const config_path = path.join('../sapphire-platform-server/config.json');
 nconf.argv().env('__').file({file: config_path});
 
