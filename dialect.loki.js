@@ -1,43 +1,112 @@
-const express         = require('express');
-const request         = require('request');
-const bodyParser      = require('body-parser');
-const Cookies         = require('cookies');
-const multer          = require('multer');
-const bb              = require('bytebuffer');
-const libsignal       = require('libsignal');
-const crypto          = require('crypto');
+const bb        = require('bytebuffer');
+const libsignal = require('libsignal');
+const crypto    = require('crypto');
 
-const app = express();
-const router = express.Router();
-const storage = multer.memoryStorage();
-const tempDB = {};
-const cache = require('../sapphire-platform-server/dataaccess.caminte.js');
+const SESSION_TTL_MSECS = 120000;
+const TOKEN_TTL_MINS = 60;
+
 const ADN_SCOPES = 'basic stream write_post follow messages update_profile files export';
 const IV_LENGTH = 16;
 
-const getTokenTimer = (pubKey, token) => {
-  return setTimeout(() => {
-    // 2 minute token timeout for temp db
-    tempDB[pubKey] = tempDB[pubKey].filter(entry => {
-      entry.token !== token;
-    });
-    if (tempDB[pubKey].length === 0) {
-      delete tempDB[pubKey];
-    }
-  }, 120000);
+// mount will set this
+var cache;
+
+// our temp database for ephemeral data
+const tempDB = {};
+
+// create the abstraction layer, so this can be scaled into IPC later on
+
+//
+// start tempdb abstraction layer
+//
+
+// registers a token, and it's expiration
+// if it's gets validated, it will be promoted
+const addTempStorage = (pubKey, token) => {
+  if(!tempDB[pubKey]) {
+    tempDB[pubKey] = [];
+  }
+  // consider moving the expiration out of this layer?
+  tempDB[pubKey].push({
+    token,
+    timer: setTimeout(() => {
+      deleteTempStorageForToken(pubKey, token)
+    }, SESSION_TTL_MSECS)
+  });
 }
 
-const findOrCreateToken = async (pubKey) => {
+const deleteTempStorageForToken = (pubKey, token) => {
+  // maybe an array check?
+  if (tempDB[pubKey] === undefined) return
+  for(var i in tempDB[pubKey]) {
+    var currentToken = tempDB[pubKey][i]
+    if (currentToken.token === token) {
+      // remove it by index
+      clearTimeout(currentToken.timer)
+      tempDB[pubKey].splice(i, 1);
+      if (!tempDB[pubKey].length) {
+        // was the last
+        delete tempDB[pubKey];
+        return;
+      }
+      // continue incase there's more than one
+    }
+  }
+}
+
+const checkTempStorageForToken = (token) => {
+  // check temp storage
+  for(var usedToken in tempDB) {
+    if (usedToken === token) return true;
+  }
+  return false;
+}
+
+//
+// end tempdb abstraction layer
+//
+
+// verify a token is not in use
+const findToken = (token) => {
+  return new Promise((res, rej) => {
+    // if not found in temp storage
+    if (checkTempStorageForToken(token)) {
+      return res(true);
+    }
+    // check database
+    cache.getAPIUserToken(token, function(usertoken, err) {
+      if (err) {
+        return rej(err);
+      }
+      // report back existence
+      res(usertoken?true:false);
+    });
+  });
+}
+
+// make a token-like string
+const generateString = () => {
+  // Temp function
+  const TOKEN_LEN = 96;
+  let token = '';
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < TOKEN_LEN; i++) {
+    token += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return token;
+}
+
+const createToken = (pubKey) => {
   return new Promise((res, rej) => {
     findOrCreateUser(pubKey)
-      .then(user => {
-        cache.createOrFindUserToken(user.id, 'loki', ADN_SCOPES, (usertoken, tokenErr) => {
-          if (tokenErr) {
-            return rej(tokenErr);
-          }
-          // we don't need to validation application because there is only one application
-          res(usertoken);
-        })
+      .then(async user => {
+        // generate new random token and make sure it's not in use
+        let inUse = true;
+        while(inUse) {
+          token = generateString();
+          inUse = await findToken(token);
+        }
+        res(token)
       })
       .catch(e => {
         rej(e);
@@ -45,7 +114,7 @@ const findOrCreateToken = async (pubKey) => {
   })
 }
 
-const findOrCreateUser = async (pubKey) => {
+const findOrCreateUser = (pubKey) => {
   return new Promise((res, rej) => {
     cache.getUserID(pubKey, (user, err) => {
       if (err) {
@@ -70,28 +139,31 @@ const findOrCreateUser = async (pubKey) => {
   })
 }
 
-const confirmToken = async (pubKey, token) => {
-  if (!tempDB[pubKey]) {
-    return false;
-  }
-  // Check to ensure the token submitted has been sent to pubKey before
-  let tokenFound = false;
-  tempDB[pubKey] = tempDB[pubKey].filter(entry => {
-    const thisTokenFound = entry.token === token;
-    if (thisTokenFound) {
-      clearTimeout(entry.timer);
-      tokenFound = true;
+const confirmToken = (pubKey, token) => {
+  return new Promise(async (res, rej) => {
+    // Check to ensure the token submitted has been generated in the last 2 minutes
+    if (!checkTempStorageForToken(pubKey, token)) {
+      return rej('invalid');
     }
-    return !thisTokenFound;
-  });
-  if (tempDB[pubKey].length === 0) {
-    delete tempDB[pubKey];
-  }
-  if (tokenFound) {
-    // TODO: Register token with platform?
-    return true;
-  }
-  return false;
+    // Token has been recently generated
+    // finally ensure user for pubKey
+    const userObj = await findOrCreateUser(pubKey);
+    if (!userObj) {
+      return rej('user');
+    }
+    // promote token to usable for user
+    cache.addUnconstrainedAPIUserToken(userObj.id, 'messenger', ADN_SCOPES, token, TOKEN_TTL_MINS, function(tokenObj, err) {
+      if (err) {
+        // we'll keep the token in the temp storage, so they can retry
+        return rej('tokenCreation');
+      }
+      // ok token is now registered
+      // remove from temp storage
+      deleteTempStorageForToken(pubKey, token);
+      // return success
+      res(true);
+    });
+  })
 }
 
 const getChallenge = async (pubKey) => {
@@ -104,7 +176,9 @@ const getChallenge = async (pubKey) => {
     serverKey.privKey
   );
 
-  const { token } = await findOrCreateToken(pubKey);
+  const token = await createToken(pubKey);
+  addTempStorage(pubKey, token);
+
   const tokenData = Buffer.from(bb.wrap(token).toArrayBuffer());
 
   const iv = crypto.randomBytes(IV_LENGTH);
@@ -123,87 +197,57 @@ const getChallenge = async (pubKey) => {
 
   const cipherText64 = bb.wrap(ivAndCiphertext).toString('base64');
 
-  if(!tempDB[pubKey]) {
-    tempDB[pubKey] = [];
-  }
-  tempDB[pubKey].push({
-    token,
-    timer: getTokenTimer(pubKey, token),
-  });
-
   return {
     cipherText64,
     serverPubKey64,
   };
 }
 
-/** need this for POST parsing */
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({
-  extended: true
-}));
+module.exports=function mount(app, prefix) {
+  // set cache based on dispatcher object
+  cache = app.dispatcher.cache;
 
-app.all('/*', (req, res, next) => {
-  console.log('got request', req.path)
-  res.start=new Date().getTime();
-  origin = req.get('Origin') || '*';
-  res.set('Access-Control-Allow-Origin', origin);
-  res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.set('Access-Control-Expose-Headers', 'Content-Length');
-  res.set('Access-Control-Allow-Credentials', 'true');
-  res.set('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization'); // add the list of headers your site allows.
-  if (req.method === 'OPTIONS') {
-    const ts = new Date().getTime();
-    const diff = ts-res.start;
-    if (diff > 100) {
-      console.log('app.js - OPTIONS requests served in', (diff)+'ms', req.path);
+  app.post(prefix + '/loki/v1/submit_challenge', (req, res) => {
+    const { pubKey, token } = req.body;
+    if (!pubKey) {
+      console.log('submit_challenge pubKey missing');
+      res.status(422).type('application/json').end(JSON.stringify({
+        error: 'pubKey missing',
+      }));
+      return;
     }
-    return res.sendStatus(200);
-  }
-  next();
-});
+    if (!token) {
+      console.log('submit_challenge token missing');
+      res.status(422).type('application/json').end(JSON.stringify({
+        error: 'token missing',
+      }));
+      return;
+    }
+    if (confirmToken(pubKey, token)) {
+      res.status(200).end();
+    } else {
+      res.status(500).end();
+    }
+  });
 
-app.post('/loki/v1/submit_challenge', (req, res) => {
-  const { pubKey, token } = req.body;
-  if (!pubKey) {
-    console.log('submit_challenge pubKey missing');
-    res.status(422).type('application/json').end(JSON.stringify({
-      error: 'pubKey missing',
-    }));
-    return;
-  }
-  if (!token) {
-    console.log('submit_challenge token missing');
-    res.status(422).type('application/json').end(JSON.stringify({
-      error: 'token missing',
-    }));
-    return;
-  }
-  if (confirmToken(pubKey, token)) {
-    res.status(200).end();
-  } else {
-    res.status(500).end();
-  }
-});
+  app.get(prefix + '/loki/v1/get_challenge', (req, res) => {
+    const { pubKey } = req.query;
+    if (!pubKey) {
+      console.log('get_challenge pubKey missing');
+      res.status(422).type('application/json').end(JSON.stringify({
+        error: 'PubKey missing',
+      }));
+      return;
+    }
+    getChallenge(pubKey).then(keyInfo => {
+      res.status(200).type('application/json').end(JSON.stringify(keyInfo));
+    }).catch(err => {
+      console.log(`Error getting challenge: ${err}`);
+      res.status(500).type('application/json').end(JSON.stringify({
+        error: err.toString(),
+      }));
+      return;
+    })
+  });
 
-app.get('/loki/v1/get_challenge', (req, res) => {
-  const { pubKey } = req.query;
-  if (!pubKey) {
-    console.log('get_challenge pubKey missing');
-    res.status(422).type('application/json').end(JSON.stringify({
-      error: 'PubKey missing',
-    }));
-    return;
-  }
-  getChallenge(pubKey).then(keyInfo => {
-    res.status(200).type('application/json').end(JSON.stringify(keyInfo));
-  }).catch(err => {
-    console.log(`Error getting challenge: ${err}`);
-    res.status(500).type('application/json').end(JSON.stringify({
-      error: err.toString(),
-    }));
-    return;
-  })
-});
-
-app.listen(8081);
+}
