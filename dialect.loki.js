@@ -231,21 +231,33 @@ module.exports=function mount(app, prefix) {
 
   let user_access = {};
   let pubkey_whitelist = {};
-  if (fs.existsSync('loki.ini')) {
-    const ini_bytes = fs.readFileSync('loki.ini')
-    disk_config = ini.iniToJSON(ini_bytes.toString())
-    console.log('config', disk_config);
 
-    // load globals pubkeys from file and set their access level
-    for(var pubKey in disk_config.globals) {
-      const access = disk_config.globals[pubKey];
-      // translate pubKey to id of user
-      cache.getUserID(pubKey, function(user, err) {
-        //console.log('setting', user.id, 'to', access);
-        user_access[user.id] = access;
-      })
+  function updateUserAccess() {
+    if (fs.existsSync('loki.ini')) {
+      const ini_bytes = fs.readFileSync('loki.ini')
+      disk_config = ini.iniToJSON(ini_bytes.toString())
+      console.log('config', disk_config);
+
+      // reset permissions to purge any deletions
+      user_access = {};
+      // load globals pubkeys from file and set their access level
+      for(var pubKey in disk_config.globals) {
+        const access = disk_config.globals[pubKey];
+        // translate pubKey to id of user
+        cache.getUserID(pubKey, function(user, err) {
+          //console.log('setting', user.id, 'to', access);
+
+          // only if user has registered
+          if (user) {
+            user_access[user.id] = access;
+          }
+        })
+      }
     }
   }
+  updateUserAccess()
+  // update every 15 mins
+  setInterval(updateUserAccess, 15 * 60 * 1000)
 
   function passesWhitelist(pubKey) {
     // if we have a whitelist
@@ -314,7 +326,7 @@ module.exports=function mount(app, prefix) {
     })
   });
 
-  function validUser(token, resObj, cb) {
+  function validUser(token, res, cb) {
     app.dispatcher.getUserClientByToken(token, function(usertoken, err) {
       if (err) {
         console.error('token err', err);
@@ -340,8 +352,8 @@ module.exports=function mount(app, prefix) {
     })
   }
 
-  function validGlobal(token, resObj, cb) {
-    validUser(req.token, res, function(usertoken) {
+  function validGlobal(token, res, cb) {
+    validUser(token, res, function(usertoken) {
       const list = user_access[usertoken.userid]
       if (!list) {
         // not even on the list
@@ -353,7 +365,7 @@ module.exports=function mount(app, prefix) {
         };
         return sendresponse(resObj, res);
       }
-      if (list.match(/,/)) {
+      if (list.match && list.match(/,/)) {
         return cb(usertoken, list.split(/,/))
       }
       cb(usertoken, true)
@@ -415,6 +427,16 @@ module.exports=function mount(app, prefix) {
             meta: {
               code: 500,
               error_message: getErr
+            }
+          };
+          return sendresponse(resObj, res);
+        }
+
+        // handle already deleted messages
+        if (!message || message.is_deleted) {
+          const resObj={
+            meta: {
+              code: 410,
             }
           };
           return sendresponse(resObj, res);
