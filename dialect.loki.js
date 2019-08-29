@@ -459,7 +459,7 @@ module.exports=function mount(app, prefix) {
         }
 
         // carry out deletion
-        cache.deleteMessage(message.id, function(message, delErr) {
+        cache.deleteMessage(message.id, message.channel_id, function(message, delErr) {
           // handle errors
           if (delErr) {
             console.error('deleteMessage err', delErr);
