@@ -2,7 +2,7 @@ const fs        = require('fs');
 const crypto    = require('crypto');
 const bb        = require('bytebuffer');
 const libsignal = require('libsignal');
-const ini       = require('loki-launcher/ini')
+const ini       = require('loki-launcher/ini');
 
 const SESSION_TTL_MSECS = 120000;
 const TOKEN_TTL_MINS = 60;
@@ -76,7 +76,7 @@ const findToken = (token) => {
       return res(true);
     }
     // check database
-    cache.getAPIUserToken(token, function(usertoken, err) {
+    cache.getAPIUserToken(token, (usertoken, err) => {
       if (err) {
         return rej(err);
       }
@@ -113,7 +113,7 @@ const createToken = (pubKey) => {
       .catch(e => {
         rej(e);
       });
-  })
+  });
 }
 
 const findOrCreateUser = (pubKey) => {
@@ -137,8 +137,8 @@ const findOrCreateUser = (pubKey) => {
         // we have this user
         res(user);
       }
-    })
-  })
+    });
+  });
 }
 
 // getChallenge only sends token encrypted
@@ -156,7 +156,7 @@ const confirmToken = (pubKey, token) => {
       return rej('user');
     }
     // promote token to usable for user
-    cache.addUnconstrainedAPIUserToken(userObj.id, 'messenger', ADN_SCOPES, token, TOKEN_TTL_MINS, function(tokenObj, err) {
+    cache.addUnconstrainedAPIUserToken(userObj.id, 'messenger', ADN_SCOPES, token, TOKEN_TTL_MINS, (tokenObj, err) => {
       if (err) {
         // we'll keep the token in the temp storage, so they can retry
         return rej('tokenCreation');
@@ -167,7 +167,7 @@ const confirmToken = (pubKey, token) => {
       // return success
       res(true);
     });
-  })
+  });
 }
 
 const getChallenge = async (pubKey) => {
@@ -241,7 +241,7 @@ const sendresponse = (json, resp) => {
   resp.send(json);
 }
 
-module.exports = function mount(app, prefix) {
+module.exports = (app, prefix) => {
   // set cache based on dispatcher object
   cache = app.dispatcher.cache;
 
@@ -260,7 +260,7 @@ module.exports = function mount(app, prefix) {
       for(const pubKey in disk_config.globals) {
         const access = disk_config.globals[pubKey];
         // translate pubKey to id of user
-        cache.getUserID(pubKey, function(user, err) {
+        cache.getUserID(pubKey, (user, err) => {
           //console.log('setting', user.id, 'to', access);
 
           // only if user has registered
@@ -271,9 +271,9 @@ module.exports = function mount(app, prefix) {
       }
     }
   }
-  updateUserAccess()
+  updateUserAccess();
   // update every 15 mins
-  setInterval(updateUserAccess, 15 * 60 * 1000)
+  setInterval(updateUserAccess, 15 * 60 * 1000);
 
   const passesWhitelist = (pubKey) => {
     // if we have a whitelist
@@ -339,12 +339,12 @@ module.exports = function mount(app, prefix) {
         error: err.toString(),
       }));
       return;
-    })
+    });
   });
 
   const validUser = (token, res, cb) => {
     return new Promise((resolve, rej) => {
-      app.dispatcher.getUserClientByToken(token, function(usertoken, err) {
+      app.dispatcher.getUserClientByToken(token, (usertoken, err) => {
         if (err) {
           console.error('token err', err);
           const resObj={
@@ -369,12 +369,12 @@ module.exports = function mount(app, prefix) {
         }
         if (cb) cb(usertoken)
         resolve(usertoken)
-      })
-    })
+      });
+    });
   }
 
   const validGlobal = (token, res, cb) => {
-    validUser(token, res, function(usertoken) {
+    validUser(token, res, (usertoken) => {
       const list = user_access[usertoken.userid];
       if (!list) {
         // not even on the list
@@ -390,11 +390,11 @@ module.exports = function mount(app, prefix) {
         return cb(usertoken, list.split(/,/));
       }
       cb(usertoken, true);
-    })
+    });
   }
 
   app.get(prefix + '/loki/v1/user_info', (req, res) => {
-    validUser(req.token, res, function(usertoken) {
+    validUser(req.token, res, (usertoken) => {
       //console.log('usertoken',  JSON.stringify(usertoken))
       const resObj={
         meta: {
@@ -410,13 +410,13 @@ module.exports = function mount(app, prefix) {
         }
       };
       return sendresponse(resObj, res);
-    })
-  })
+    });
+  });
 
   app.get(prefix + '/loki/v1/channel/:id/deletes', (req, res) => {
     const numId = parseInt(req.params.id);
     //console.log('numId', numId)
-    cache.getChannelDeletions(numId, req.apiParams, function(interactions, err, meta) {
+    cache.getChannelDeletions(numId, req.apiParams, (interactions, err, meta) => {
       console.log('interactions', interactions)
       const items = interactions.map(interaction => ({
         delete_at: interaction.datetime,
@@ -443,13 +443,19 @@ module.exports = function mount(app, prefix) {
     })
   })
 
+  // backwards compatibilty
+  //app.get(prefix + '/loki/v1/channel/:id/deletes', deletesHandler);
+  // new official URL to keep it consistent
+  //app.get(prefix + '/loki/v1/channels/:id/deletes', deletesHandler);
+
+
   app.delete(prefix + '/loki/v1/moderation/message/:id', (req, res) => {
-    validGlobal(req.token, res, function(usertoken, access_list) {
+    validGlobal(req.token, res, (usertoken, access_list) => {
       // FIXME: support comma-separate list of IDs
 
       // get message channel
       const numId = parseInt(req.params.id);
-      cache.getMessage(numId, function(message, getErr) {
+      cache.getMessage(numId, (message, getErr) => {
         // handle errors
         if (getErr) {
           console.error('getMessage err', getErr);
@@ -489,7 +495,7 @@ module.exports = function mount(app, prefix) {
         }
 
         // carry out deletion
-        cache.deleteMessage(message.id, message.channel_id, function(message, delErr) {
+        cache.deleteMessage(message.id, message.channel_id, (message, delErr) => {
           // handle errors
           if (delErr) {
             console.error('deleteMessage err', delErr);
@@ -511,9 +517,9 @@ module.exports = function mount(app, prefix) {
             }
           };
           return sendresponse(resObj, res);
-        })
-      })
-    })
+        });
+      });
+    });
 
-  })
+  });
 }
