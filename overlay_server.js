@@ -1,9 +1,18 @@
+const fs         = require('fs');
 const path       = require('path');
 const nconf      = require('nconf');
 const express    = require('express');
 const bodyParser = require('body-parser');
+const ini        = require('loki-launcher/ini');
 
 const app = express();
+
+// Look for a config file
+const ini_bytes = fs.readFileSync('loki.ini');
+disk_config = ini.iniToJSON(ini_bytes.toString());
+
+//console.log('disk_config', disk_config)
+const overlay_port = parseInt(disk_config.api.port) || 8080;
 
 const config_path = path.join('../sapphire-platform-server/config.json');
 nconf.argv().env('__').file({file: config_path});
@@ -11,7 +20,7 @@ nconf.argv().env('__').file({file: config_path});
 const cache = require('../sapphire-platform-server/dataaccess.caminte.js');
 cache.start(nconf);
 
-/** need this for POST parsing */
+// need this for POST parsing
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({
   extended: true
@@ -19,7 +28,7 @@ app.use(bodyParser.urlencoded({
 
 app.all('/*', (req, res, next) => {
   console.log('got request', req.path);
-  res.start=new Date().getTime();
+  res.start = new Date().getTime();
   origin = req.get('Origin') || '*';
   res.set('Access-Control-Allow-Origin', origin);
   res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
@@ -38,12 +47,12 @@ app.all('/*', (req, res, next) => {
   // set req.token
   if (req.query.access_token) {
     // passed by querystring
-    req.token=req.query.access_token;
-    if (typeof(req.token) == 'object') {
+    req.token = req.query.access_token;
+    if (typeof(req.token) === 'object') {
       req.token = req.token.filter(function (x, i, a) {
-        return a.indexOf(x) == i;
+        return a.indexOf(x) === i;
       });
-      if (req.token.length == 1) {
+      if (req.token.length === 1) {
         console.warn('reduced multiple similar access_token params')
         req.token = req.token[0] // deArray it
       } else {
@@ -53,44 +62,44 @@ app.all('/*', (req, res, next) => {
   } else {
     // passed by header
     if (req.get('Authorization')) {
-      req.token=req.get('Authorization').replace('Bearer ', '');
+      req.token = req.get('Authorization').replace('Bearer ', '');
     }
   }
 
   // set up paging parameters
-  var pageParams={};
-  pageParams.since_id=false;
+  const pageParams = {};
+  pageParams.since_id = false;
   if (req.query.since_id) {
     //console.log("Overriding since_id to "+req.query.since_id);
-    pageParams.since_id=parseInt(req.query.since_id);
+    pageParams.since_id = parseInt(req.query.since_id);
   }
   pageParams.before_id=false;
   if (req.query.before_id) {
     //console.log("Overriding before_id to "+req.query.before_id);
-    pageParams.before_id=parseInt(req.query.before_id);
+    pageParams.before_id = parseInt(req.query.before_id);
   }
   pageParams.count=20;
   if (req.query.count) {
     //console.log("Overriding count to "+req.query.count);
-    pageParams.count=Math.min(Math.max(req.query.count, -200), 200);
+    pageParams.count = Math.min(Math.max(req.query.count, -200), 200);
   }
   // stream marker supported endpoints only
-  pageParams.last_read=false;
-  pageParams.last_read_inclusive=false;
-  pageParams.last_marker=false;
-  pageParams.last_marker_inclusive=false;
+  pageParams.last_read = false;
+  pageParams.last_read_inclusive = false;
+  pageParams.last_marker = false;
+  pageParams.last_marker_inclusive = false;
 
   // put objects into request
-  req.apiParams={
+  req.apiParams = {
     pageParams: pageParams,
     token: req.token,
   }
 
   // configure response
-  res.prettyPrint=req.get('X-ADN-Pretty-JSON') || 0;
+  res.prettyPrint = req.get('X-ADN-Pretty-JSON') || 0;
   // non-ADN spec, ryantharp hack
   if (req.query.prettyPrint) {
-    res.prettyPrint=1;
+    res.prettyPrint = 1;
   }
 
   next();
@@ -105,5 +114,7 @@ app.dispatcher={
 };
 const lokiDialectMount = require('./dialect.loki');
 lokiDialectMount(app, '');
+// const modDialectMount = require('./dialect.webModerator');
+// modDialectMount(app, '');
 
-app.listen(8081);
+app.listen(overlay_port);
