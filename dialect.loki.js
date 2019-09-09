@@ -4,8 +4,8 @@ const bb        = require('bytebuffer');
 const libsignal = require('libsignal');
 const ini       = require('loki-launcher/ini');
 
-const SESSION_TTL_MSECS = 120000;
-const TOKEN_TTL_MINS = 60;
+const SESSION_TTL_MSECS = 120 * 1000; // 2 minutes
+const TOKEN_TTL_MINS = 0; // 0 means don't expire
 
 const ADN_SCOPES = 'basic stream write_post follow messages update_profile files export';
 const IV_LENGTH = 16;
@@ -57,13 +57,29 @@ const deleteTempStorageForToken = (pubKey, token) => {
 }
 
 const checkTempStorageForToken = (token) => {
+  //console.log('searching for', token)
   // check temp storage
-  for(var usedToken in tempDB) {
-    if (usedToken === token) return true;
+  for(var pubKey in tempDB) {
+    const found = tempDB[pubKey].find(tempObjs => {
+      const tempToken = tempObjs.token;
+      //console.log('pubKey', pubKey, 'token', tempToken);
+      if (tempToken === token) return true;
+    })
+    //console.log('pubKey', pubKey, 'found', found);
+    if (found) {
+      return true;
+    }
   }
   return false;
 }
 
+const getTempTokenList = () => {
+  return Object.keys(tempDB).map(pubKey => {
+    return tempDB[pubKey].map(tempObj => {
+      return tempObj.token;
+    });
+  });
+}
 //
 // end tempdb abstraction layer
 //
@@ -141,35 +157,6 @@ const findOrCreateUser = (pubKey) => {
   });
 }
 
-// getChallenge only sends token encrypted
-// so if we guess a pubKey's token that we've generated, we grant access
-const confirmToken = (pubKey, token) => {
-  return new Promise(async (res, rej) => {
-    // Check to ensure the token submitted has been generated in the last 2 minutes
-    if (!checkTempStorageForToken(token)) {
-      return rej('invalid');
-    }
-    // Token has been recently generated
-    // finally ensure user for pubKey
-    const userObj = await findOrCreateUser(pubKey);
-    if (!userObj) {
-      return rej('user');
-    }
-    // promote token to usable for user
-    cache.addUnconstrainedAPIUserToken(userObj.id, 'messenger', ADN_SCOPES, token, TOKEN_TTL_MINS, (tokenObj, err) => {
-      if (err) {
-        // we'll keep the token in the temp storage, so they can retry
-        return rej('tokenCreation');
-      }
-      // ok token is now registered
-      // remove from temp storage
-      deleteTempStorageForToken(pubKey, token);
-      // return success
-      res(true);
-    });
-  });
-}
-
 const getChallenge = async (pubKey) => {
   // make our local keypair
   const serverKey = libsignal.curve.generateKeyPair();
@@ -219,6 +206,36 @@ const getChallenge = async (pubKey) => {
     cipherText64,
     serverPubKey64,
   };
+}
+
+// getChallenge only sends token encrypted
+// so if we guess a pubKey's token that we've generated, we grant access
+const confirmToken = (pubKey, token) => {
+  return new Promise(async (res, rej) => {
+    // Check to ensure the token submitted has been generated in the last 2 minutes
+    if (!checkTempStorageForToken(token)) {
+      console.log('token', token, 'not in', getTempTokenList());
+      return rej('invalid');
+    }
+    // Token has been recently generated
+    // finally ensure user for pubKey
+    const userObj = await findOrCreateUser(pubKey);
+    if (!userObj) {
+      return rej('user');
+    }
+    // promote token to usable for user
+    cache.addUnconstrainedAPIUserToken(userObj.id, 'messenger', ADN_SCOPES, token, TOKEN_TTL_MINS, (tokenObj, err) => {
+      if (err) {
+        // we'll keep the token in the temp storage, so they can retry
+        return rej('tokenCreation');
+      }
+      // ok token is now registered
+      // remove from temp storage
+      deleteTempStorageForToken(pubKey, token);
+      // return success
+      res(true);
+    });
+  });
 }
 
 const sendresponse = (json, resp) => {
@@ -285,34 +302,7 @@ module.exports = (app, prefix) => {
     return true;
   }
 
-  app.post(prefix + '/loki/v1/submit_challenge', (req, res) => {
-    const { pubKey, token } = req.body;
-    if (!pubKey) {
-      console.log('submit_challenge pubKey missing');
-      res.status(422).type('application/json').end(JSON.stringify({
-        error: 'pubKey missing',
-      }));
-      return;
-    }
-    if (!passesWhitelist(pubKey)) {
-      console.log('get_challenge ', pubKey, 'not whitelisted');
-      return res.status(401).type('application/json').end(JSON.stringify({
-        error: 'not allowed',
-      }));
-    }
-    if (!token) {
-      console.log('submit_challenge token missing');
-      res.status(422).type('application/json').end(JSON.stringify({
-        error: 'token missing',
-      }));
-      return;
-    }
-    if (confirmToken(pubKey, token)) {
-      res.status(200).end();
-    } else {
-      res.status(500).end();
-    }
-  });
+  // I guess we're adding these in chronological order
 
   app.get(prefix + '/loki/v1/get_challenge', (req, res) => {
     const { pubKey } = req.query;
@@ -339,6 +329,42 @@ module.exports = (app, prefix) => {
         error: err.toString(),
       }));
       return;
+    });
+  });
+
+  app.post(prefix + '/loki/v1/submit_challenge', (req, res) => {
+    const { pubKey, token } = req.body;
+    if (!pubKey) {
+      console.log('submit_challenge pubKey missing');
+      res.status(422).type('application/json').end(JSON.stringify({
+        error: 'pubKey missing',
+      }));
+      return;
+    }
+    if (!passesWhitelist(pubKey)) {
+      console.log('get_challenge ', pubKey, 'not whitelisted');
+      return res.status(401).type('application/json').end(JSON.stringify({
+        error: 'not allowed',
+      }));
+    }
+    if (!token) {
+      console.log('submit_challenge token missing');
+      res.status(422).type('application/json').end(JSON.stringify({
+        error: 'token missing',
+      }));
+      return;
+    }
+    confirmToken(pubKey, token).then(confirmation => {
+      // confirmation should be true
+      res.status(200).end();
+    }).catch(err => {
+      console.log(`Error confirming challenge: ${err}`);
+      // handle errors we know
+      if (err == 'invalid') {
+        res.status(401).end();
+      } else {
+        res.status(500).end();
+      }
     });
   });
 
@@ -413,40 +439,27 @@ module.exports = (app, prefix) => {
     });
   });
 
-  app.get(prefix + '/loki/v1/channel/:id/deletes', (req, res) => {
+  const deletesHandler = (req, res) => {
     const numId = parseInt(req.params.id);
     //console.log('numId', numId)
     cache.getChannelDeletions(numId, req.apiParams, (interactions, err, meta) => {
-      console.log('interactions', interactions)
       const items = interactions.map(interaction => ({
         delete_at: interaction.datetime,
         message_id: interaction.typeid,
         id: interaction.id
       }));
-      // just making sure this works
-      console.log('deletes items', items)
-      /*
-      const items = []
-      for(const i in interactions) {
-        items.push({
-          delete_at: interactions[i].datetime,
-          message_id: interactions[i].typeid,
-          id: interactions[i].id
-        })
-      }
-      */
       const resObj={
         meta: meta,
         data: items
       };
       return sendresponse(resObj, res);
     })
-  })
+  }
 
   // backwards compatibilty
-  //app.get(prefix + '/loki/v1/channel/:id/deletes', deletesHandler);
+  app.get(prefix + '/loki/v1/channel/:id/deletes', deletesHandler);
   // new official URL to keep it consistent
-  //app.get(prefix + '/loki/v1/channels/:id/deletes', deletesHandler);
+  app.get(prefix + '/loki/v1/channels/:id/deletes', deletesHandler);
 
 
   app.delete(prefix + '/loki/v1/moderation/message/:id', (req, res) => {
