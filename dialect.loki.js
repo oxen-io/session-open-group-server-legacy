@@ -11,7 +11,7 @@ const ADN_SCOPES = 'basic stream write_post follow messages update_profile files
 const IV_LENGTH = 16;
 
 // mount will set this
-var cache;
+let cache;
 
 // our temp database for ephemeral data
 const tempDB = {};
@@ -39,12 +39,12 @@ const addTempStorage = (pubKey, token) => {
 
 const deleteTempStorageForToken = (pubKey, token) => {
   // maybe an array check?
-  if (tempDB[pubKey] === undefined) return
-  for(var i in tempDB[pubKey]) {
-    var currentToken = tempDB[pubKey][i]
+  if (tempDB[pubKey] === undefined) return;
+  for(const i in tempDB[pubKey]) {
+    const currentToken = tempDB[pubKey][i];
     if (currentToken.token === token) {
       // remove it by index
-      clearTimeout(currentToken.timer)
+      if (currentToken.timer) clearTimeout(currentToken.timer);
       tempDB[pubKey].splice(i, 1);
       if (!tempDB[pubKey].length) {
         // was the last
@@ -141,10 +141,12 @@ const findOrCreateUser = (pubKey) => {
   })
 }
 
+// getChallenge only sends token encrypted
+// so if we guess a pubKey's token that we've generated, we grant access
 const confirmToken = (pubKey, token) => {
   return new Promise(async (res, rej) => {
     // Check to ensure the token submitted has been generated in the last 2 minutes
-    if (!checkTempStorageForToken(pubKey, token)) {
+    if (!checkTempStorageForToken(token)) {
       return rej('invalid');
     }
     // Token has been recently generated
@@ -169,34 +171,48 @@ const confirmToken = (pubKey, token) => {
 }
 
 const getChallenge = async (pubKey) => {
+  // make our local keypair
   const serverKey = libsignal.curve.generateKeyPair();
+  // encode server's pubKey in base64
   const serverPubKey64 = bb.wrap(serverKey.pubKey).toString('base64');
 
+  // convert our hex pubKey into binary buffer
   const pubKeyData = Buffer.from(bb.wrap(pubKey, 'hex').toArrayBuffer());
+
+  // mix client pub key with server priv key
   const symKey = libsignal.curve.calculateAgreement(
     pubKeyData,
     serverKey.privKey
   );
 
+  // acquire token
   const token = await createToken(pubKey);
   addTempStorage(pubKey, token);
 
+  // convert our ascii token to binary buffer
   const tokenData = Buffer.from(bb.wrap(token).toArrayBuffer());
 
+  // some randomness
   const iv = crypto.randomBytes(IV_LENGTH);
   const iv64 = bb.wrap(iv).toString('base64');
 
+  // encrypt tokenData with symmetric Key using iv
   const ciphertext = await libsignal.crypto.encrypt(
     symKey,
     tokenData,
     iv
   );
+
+  // make final buffer for cipherText
   const ivAndCiphertext = new Uint8Array(
     iv.byteLength + ciphertext.byteLength
   );
+  // add iv
   ivAndCiphertext.set(new Uint8Array(iv));
+  // add ciphertext after iv position
   ivAndCiphertext.set(new Uint8Array(ciphertext), iv.byteLength);
 
+  // convert final buffer to base64
   const cipherText64 = bb.wrap(ivAndCiphertext).toString('base64');
 
   return {
@@ -205,15 +221,15 @@ const getChallenge = async (pubKey) => {
   };
 }
 
-function sendresponse(json, resp) {
-  var ts=new Date().getTime();
-  var diff = ts-resp.start;
+const sendresponse = (json, resp) => {
+  const ts = new Date().getTime();
+  const diff = ts-resp.start;
   if (diff > 1000) {
     // this could be to do the client's connection speed
     // how because we stop the clock before we send the response...
-    console.log(resp.path+' served in '+(ts-resp.start)+'ms');
+    console.log(`${resp.path} served in ${ts - resp.start}ms`);
   }
-  if (json.meta.code) {
+  if (json.meta && json.meta.code) {
     resp.status(json.meta.code);
   }
   if (resp.prettyPrint) {
@@ -225,14 +241,14 @@ function sendresponse(json, resp) {
   resp.send(json);
 }
 
-module.exports=function mount(app, prefix) {
+module.exports = function mount(app, prefix) {
   // set cache based on dispatcher object
   cache = app.dispatcher.cache;
 
   let user_access = {};
   let pubkey_whitelist = {};
 
-  function updateUserAccess() {
+  const updateUserAccess = () => {
     if (fs.existsSync('loki.ini')) {
       const ini_bytes = fs.readFileSync('loki.ini')
       disk_config = ini.iniToJSON(ini_bytes.toString())
@@ -241,7 +257,7 @@ module.exports=function mount(app, prefix) {
       // reset permissions to purge any deletions
       user_access = {};
       // load globals pubkeys from file and set their access level
-      for(var pubKey in disk_config.globals) {
+      for(const pubKey in disk_config.globals) {
         const access = disk_config.globals[pubKey];
         // translate pubKey to id of user
         cache.getUserID(pubKey, function(user, err) {
@@ -259,7 +275,7 @@ module.exports=function mount(app, prefix) {
   // update every 15 mins
   setInterval(updateUserAccess, 15 * 60 * 1000)
 
-  function passesWhitelist(pubKey) {
+  const passesWhitelist = (pubKey) => {
     // if we have a whitelist
     if (disk_config.whitelist && !disk_config.whitelist[pubKey]) {
       // and you're not on it
@@ -326,35 +342,40 @@ module.exports=function mount(app, prefix) {
     })
   });
 
-  function validUser(token, res, cb) {
-    app.dispatcher.getUserClientByToken(token, function(usertoken, err) {
-      if (err) {
-        console.error('token err', err);
-        const resObj={
-          meta: {
-            code: 500,
-            error_message: err
-          }
-        };
-        return sendresponse(resObj, res);
-      }
-      if (usertoken === null) {
-        // could be they didn't log in through a server restart
-        const resObj={
-          meta: {
-            code: 401,
-            error_message: "Call requires authentication: Authentication required to fetch token."
-          }
-        };
-        return sendresponse(resObj, res);
-      }
-      cb(usertoken)
+  const validUser = (token, res, cb) => {
+    return new Promise((resolve, rej) => {
+      app.dispatcher.getUserClientByToken(token, function(usertoken, err) {
+        if (err) {
+          console.error('token err', err);
+          const resObj={
+            meta: {
+              code: 500,
+              error_message: err
+            }
+          };
+          sendresponse(resObj, res);
+          return rej();
+        }
+        if (usertoken === null) {
+          // could be they didn't log in through a server restart
+          const resObj={
+            meta: {
+              code: 401,
+              error_message: "Call requires authentication: Authentication required to fetch token."
+            }
+          };
+          sendresponse(resObj, res);
+          return rej();
+        }
+        if (cb) cb(usertoken)
+        resolve(usertoken)
+      })
     })
   }
 
-  function validGlobal(token, res, cb) {
+  const validGlobal = (token, res, cb) => {
     validUser(token, res, function(usertoken) {
-      const list = user_access[usertoken.userid]
+      const list = user_access[usertoken.userid];
       if (!list) {
         // not even on the list
         const resObj={
@@ -366,9 +387,9 @@ module.exports=function mount(app, prefix) {
         return sendresponse(resObj, res);
       }
       if (list.match && list.match(/,/)) {
-        return cb(usertoken, list.split(/,/))
+        return cb(usertoken, list.split(/,/));
       }
-      cb(usertoken, true)
+      cb(usertoken, true);
     })
   }
 
@@ -396,15 +417,24 @@ module.exports=function mount(app, prefix) {
     const numId = parseInt(req.params.id);
     //console.log('numId', numId)
     cache.getChannelDeletions(numId, req.apiParams, function(interactions, err, meta) {
-      //console.log('interactions', interactions)
-      var items = []
-      for(var i in interactions) {
+      console.log('interactions', interactions)
+      const items = interactions.map(interaction => ({
+        delete_at: interaction.datetime,
+        message_id: interaction.typeid,
+        id: interaction.id
+      }));
+      // just making sure this works
+      console.log('deletes items', items)
+      /*
+      const items = []
+      for(const i in interactions) {
         items.push({
           delete_at: interactions[i].datetime,
           message_id: interactions[i].typeid,
           id: interactions[i].id
         })
       }
+      */
       const resObj={
         meta: meta,
         data: items
@@ -418,7 +448,7 @@ module.exports=function mount(app, prefix) {
       // FIXME: support comma-separate list of IDs
 
       // get message channel
-      var numId = parseInt(req.params.id);
+      const numId = parseInt(req.params.id);
       cache.getMessage(numId, function(message, getErr) {
         // handle errors
         if (getErr) {
@@ -445,8 +475,8 @@ module.exports=function mount(app, prefix) {
         // if not full access
         if (access_list !== true) {
           // see if this message's channel is on the list
-          var allowed = access_list.indexOf(message.channel_id);
-          if (allowed == -1) {
+          const allowed = access_list.indexOf(message.channel_id);
+          if (allowed === -1) {
             // not allowed to manage this channel
             const resObj={
               meta: {
