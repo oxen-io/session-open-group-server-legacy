@@ -6,11 +6,11 @@
   "dependencies": {
     "body-parser": "^1.19.0",
     "bytebuffer": "^5.0.1",
-    "cookies": "^0.7.3",
+    "caminte": "^0.4.1",
     "express": "^4.17.1",
     "libsignal": "^2.0.1",
     "loki-launcher": "^1.0.0",
-    "multer": "^1.4.2",
+    "mocha": "^6.2.0",
     "nconf": "^0.10.0",
     "request": "^2.88.0"
   },
