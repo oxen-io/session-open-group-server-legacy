@@ -12,6 +12,7 @@
     "loki-launcher": "^1.0.0",
     "mocha": "^6.2.0",
     "nconf": "^0.10.0",
+    "node-fetch": "^2.6.0",
     "request": "^2.88.0"
   },
   "devDependencies": {},
