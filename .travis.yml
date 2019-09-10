@@ -8,5 +8,5 @@ before_script:
 - cp loki_template.ini loki.ini
 - cp server/config.sample.json server/config.json
 - sed 's/"modKey": ""/"modKey": "testingKey"/' server/config.json > server/config.json
-- cd server && npm install
+- cd server && npm install && cd ..
 cache: npm
