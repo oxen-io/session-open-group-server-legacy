@@ -1,7 +1,7 @@
 
 // ES2015 arrow functions cannot be constructors
-const adnServerAPI = function(modKey, url) {
-  this.modKey = modKey;
+const adnServerAPI = function(url, token) {
+  this.token = token;
   // strip trailing slash
   this.base_url = url.replace(/\/$/, '');
 
@@ -15,9 +15,10 @@ const adnServerAPI = function(modKey, url) {
     let result;
     try {
       const fetchOptions = {};
-      const headers = {
-        Authorization: `Bearer ${this.modKey}`,
-      };
+      const headers = {};
+      if (this.token) {
+        headers.Authorization = `Bearer ${this.token}`;
+      }
       if (method) {
         fetchOptions.method = method;
       }
@@ -34,6 +35,12 @@ const adnServerAPI = function(modKey, url) {
       };
     }
     let response = null;
+    if (options.noJson) {
+      return {
+        statusCode: result.status,
+        response,
+      };
+    }
     try {
       response = await result.json();
     } catch (e) {
