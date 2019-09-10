@@ -2,16 +2,16 @@ const fs        = require('fs');
 const crypto    = require('crypto');
 const bb        = require('bytebuffer');
 const libsignal = require('libsignal');
-const ini       = require('loki-launcher/ini')
+const ini       = require('loki-launcher/ini');
 
-const SESSION_TTL_MSECS = 120000;
-const TOKEN_TTL_MINS = 60;
+const SESSION_TTL_MSECS = 120 * 1000; // 2 minutes
+const TOKEN_TTL_MINS = 0; // 0 means don't expire
 
 const ADN_SCOPES = 'basic stream write_post follow messages update_profile files export';
 const IV_LENGTH = 16;
 
 // mount will set this
-var cache;
+let cache;
 
 // our temp database for ephemeral data
 const tempDB = {};
@@ -39,12 +39,12 @@ const addTempStorage = (pubKey, token) => {
 
 const deleteTempStorageForToken = (pubKey, token) => {
   // maybe an array check?
-  if (tempDB[pubKey] === undefined) return
-  for(var i in tempDB[pubKey]) {
-    var currentToken = tempDB[pubKey][i]
+  if (tempDB[pubKey] === undefined) return;
+  for(const i in tempDB[pubKey]) {
+    const currentToken = tempDB[pubKey][i];
     if (currentToken.token === token) {
       // remove it by index
-      clearTimeout(currentToken.timer)
+      if (currentToken.timer) clearTimeout(currentToken.timer);
       tempDB[pubKey].splice(i, 1);
       if (!tempDB[pubKey].length) {
         // was the last
@@ -57,13 +57,29 @@ const deleteTempStorageForToken = (pubKey, token) => {
 }
 
 const checkTempStorageForToken = (token) => {
+  //console.log('searching for', token)
   // check temp storage
-  for(var usedToken in tempDB) {
-    if (usedToken === token) return true;
+  for(var pubKey in tempDB) {
+    const found = tempDB[pubKey].find(tempObjs => {
+      const tempToken = tempObjs.token;
+      //console.log('pubKey', pubKey, 'token', tempToken);
+      if (tempToken === token) return true;
+    })
+    //console.log('pubKey', pubKey, 'found', found);
+    if (found) {
+      return true;
+    }
   }
   return false;
 }
 
+const getTempTokenList = () => {
+  return Object.keys(tempDB).map(pubKey => {
+    return tempDB[pubKey].map(tempObj => {
+      return tempObj.token;
+    });
+  });
+}
 //
 // end tempdb abstraction layer
 //
@@ -76,7 +92,7 @@ const findToken = (token) => {
       return res(true);
     }
     // check database
-    cache.getAPIUserToken(token, function(usertoken, err) {
+    cache.getAPIUserToken(token, (usertoken, err) => {
       if (err) {
         return rej(err);
       }
@@ -113,7 +129,7 @@ const createToken = (pubKey) => {
       .catch(e => {
         rej(e);
       });
-  })
+  });
 }
 
 const findOrCreateUser = (pubKey) => {
@@ -137,14 +153,68 @@ const findOrCreateUser = (pubKey) => {
         // we have this user
         res(user);
       }
-    })
-  })
+    });
+  });
 }
 
+const getChallenge = async (pubKey) => {
+  // make our local keypair
+  const serverKey = libsignal.curve.generateKeyPair();
+  // encode server's pubKey in base64
+  const serverPubKey64 = bb.wrap(serverKey.pubKey).toString('base64');
+
+  // convert our hex pubKey into binary buffer
+  const pubKeyData = Buffer.from(bb.wrap(pubKey, 'hex').toArrayBuffer());
+
+  // mix client pub key with server priv key
+  const symKey = libsignal.curve.calculateAgreement(
+    pubKeyData,
+    serverKey.privKey
+  );
+
+  // acquire token
+  const token = await createToken(pubKey);
+  addTempStorage(pubKey, token);
+
+  // convert our ascii token to binary buffer
+  const tokenData = Buffer.from(bb.wrap(token).toArrayBuffer());
+
+  // some randomness
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const iv64 = bb.wrap(iv).toString('base64');
+
+  // encrypt tokenData with symmetric Key using iv
+  const ciphertext = await libsignal.crypto.encrypt(
+    symKey,
+    tokenData,
+    iv
+  );
+
+  // make final buffer for cipherText
+  const ivAndCiphertext = new Uint8Array(
+    iv.byteLength + ciphertext.byteLength
+  );
+  // add iv
+  ivAndCiphertext.set(new Uint8Array(iv));
+  // add ciphertext after iv position
+  ivAndCiphertext.set(new Uint8Array(ciphertext), iv.byteLength);
+
+  // convert final buffer to base64
+  const cipherText64 = bb.wrap(ivAndCiphertext).toString('base64');
+
+  return {
+    cipherText64,
+    serverPubKey64,
+  };
+}
+
+// getChallenge only sends token encrypted
+// so if we guess a pubKey's token that we've generated, we grant access
 const confirmToken = (pubKey, token) => {
   return new Promise(async (res, rej) => {
     // Check to ensure the token submitted has been generated in the last 2 minutes
-    if (!checkTempStorageForToken(pubKey, token)) {
+    if (!checkTempStorageForToken(token)) {
+      console.log('token', token, 'not in', getTempTokenList());
       return rej('invalid');
     }
     // Token has been recently generated
@@ -154,7 +224,7 @@ const confirmToken = (pubKey, token) => {
       return rej('user');
     }
     // promote token to usable for user
-    cache.addUnconstrainedAPIUserToken(userObj.id, 'messenger', ADN_SCOPES, token, TOKEN_TTL_MINS, function(tokenObj, err) {
+    cache.addUnconstrainedAPIUserToken(userObj.id, 'messenger', ADN_SCOPES, token, TOKEN_TTL_MINS, (tokenObj, err) => {
       if (err) {
         // we'll keep the token in the temp storage, so they can retry
         return rej('tokenCreation');
@@ -165,55 +235,18 @@ const confirmToken = (pubKey, token) => {
       // return success
       res(true);
     });
-  })
+  });
 }
 
-const getChallenge = async (pubKey) => {
-  const serverKey = libsignal.curve.generateKeyPair();
-  const serverPubKey64 = bb.wrap(serverKey.pubKey).toString('base64');
-
-  const pubKeyData = Buffer.from(bb.wrap(pubKey, 'hex').toArrayBuffer());
-  const symKey = libsignal.curve.calculateAgreement(
-    pubKeyData,
-    serverKey.privKey
-  );
-
-  const token = await createToken(pubKey);
-  addTempStorage(pubKey, token);
-
-  const tokenData = Buffer.from(bb.wrap(token).toArrayBuffer());
-
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const iv64 = bb.wrap(iv).toString('base64');
-
-  const ciphertext = await libsignal.crypto.encrypt(
-    symKey,
-    tokenData,
-    iv
-  );
-  const ivAndCiphertext = new Uint8Array(
-    iv.byteLength + ciphertext.byteLength
-  );
-  ivAndCiphertext.set(new Uint8Array(iv));
-  ivAndCiphertext.set(new Uint8Array(ciphertext), iv.byteLength);
-
-  const cipherText64 = bb.wrap(ivAndCiphertext).toString('base64');
-
-  return {
-    cipherText64,
-    serverPubKey64,
-  };
-}
-
-function sendresponse(json, resp) {
-  var ts=new Date().getTime();
-  var diff = ts-resp.start;
+const sendresponse = (json, resp) => {
+  const ts = new Date().getTime();
+  const diff = ts-resp.start;
   if (diff > 1000) {
     // this could be to do the client's connection speed
     // how because we stop the clock before we send the response...
-    console.log(resp.path+' served in '+(ts-resp.start)+'ms');
+    console.log(`${resp.path} served in ${ts - resp.start}ms`);
   }
-  if (json.meta.code) {
+  if (json.meta && json.meta.code) {
     resp.status(json.meta.code);
   }
   if (resp.prettyPrint) {
@@ -225,14 +258,14 @@ function sendresponse(json, resp) {
   resp.send(json);
 }
 
-module.exports=function mount(app, prefix) {
+module.exports = (app, prefix) => {
   // set cache based on dispatcher object
   cache = app.dispatcher.cache;
 
   let user_access = {};
   let pubkey_whitelist = {};
 
-  function updateUserAccess() {
+  const updateUserAccess = () => {
     if (fs.existsSync('loki.ini')) {
       const ini_bytes = fs.readFileSync('loki.ini')
       disk_config = ini.iniToJSON(ini_bytes.toString())
@@ -241,10 +274,10 @@ module.exports=function mount(app, prefix) {
       // reset permissions to purge any deletions
       user_access = {};
       // load globals pubkeys from file and set their access level
-      for(var pubKey in disk_config.globals) {
+      for(const pubKey in disk_config.globals) {
         const access = disk_config.globals[pubKey];
         // translate pubKey to id of user
-        cache.getUserID(pubKey, function(user, err) {
+        cache.getUserID(pubKey, (user, err) => {
           //console.log('setting', user.id, 'to', access);
 
           // only if user has registered
@@ -255,11 +288,11 @@ module.exports=function mount(app, prefix) {
       }
     }
   }
-  updateUserAccess()
+  updateUserAccess();
   // update every 15 mins
-  setInterval(updateUserAccess, 15 * 60 * 1000)
+  setInterval(updateUserAccess, 15 * 60 * 1000);
 
-  function passesWhitelist(pubKey) {
+  const passesWhitelist = (pubKey) => {
     // if we have a whitelist
     if (disk_config.whitelist && !disk_config.whitelist[pubKey]) {
       // and you're not on it
@@ -269,34 +302,7 @@ module.exports=function mount(app, prefix) {
     return true;
   }
 
-  app.post(prefix + '/loki/v1/submit_challenge', (req, res) => {
-    const { pubKey, token } = req.body;
-    if (!pubKey) {
-      console.log('submit_challenge pubKey missing');
-      res.status(422).type('application/json').end(JSON.stringify({
-        error: 'pubKey missing',
-      }));
-      return;
-    }
-    if (!passesWhitelist(pubKey)) {
-      console.log('get_challenge ', pubKey, 'not whitelisted');
-      return res.status(401).type('application/json').end(JSON.stringify({
-        error: 'not allowed',
-      }));
-    }
-    if (!token) {
-      console.log('submit_challenge token missing');
-      res.status(422).type('application/json').end(JSON.stringify({
-        error: 'token missing',
-      }));
-      return;
-    }
-    if (confirmToken(pubKey, token)) {
-      res.status(200).end();
-    } else {
-      res.status(500).end();
-    }
-  });
+  // I guess we're adding these in chronological order
 
   app.get(prefix + '/loki/v1/get_challenge', (req, res) => {
     const { pubKey } = req.query;
@@ -323,38 +329,79 @@ module.exports=function mount(app, prefix) {
         error: err.toString(),
       }));
       return;
-    })
+    });
   });
 
-  function validUser(token, res, cb) {
-    app.dispatcher.getUserClientByToken(token, function(usertoken, err) {
-      if (err) {
-        console.error('token err', err);
-        const resObj={
-          meta: {
-            code: 500,
-            error_message: err
-          }
-        };
-        return sendresponse(resObj, res);
+  app.post(prefix + '/loki/v1/submit_challenge', (req, res) => {
+    const { pubKey, token } = req.body;
+    if (!pubKey) {
+      console.log('submit_challenge pubKey missing');
+      res.status(422).type('application/json').end(JSON.stringify({
+        error: 'pubKey missing',
+      }));
+      return;
+    }
+    if (!passesWhitelist(pubKey)) {
+      console.log('get_challenge ', pubKey, 'not whitelisted');
+      return res.status(401).type('application/json').end(JSON.stringify({
+        error: 'not allowed',
+      }));
+    }
+    if (!token) {
+      console.log('submit_challenge token missing');
+      res.status(422).type('application/json').end(JSON.stringify({
+        error: 'token missing',
+      }));
+      return;
+    }
+    confirmToken(pubKey, token).then(confirmation => {
+      // confirmation should be true
+      res.status(200).end();
+    }).catch(err => {
+      console.log(`Error confirming challenge: ${err}`);
+      // handle errors we know
+      if (err == 'invalid') {
+        res.status(401).end();
+      } else {
+        res.status(500).end();
       }
-      if (usertoken === null) {
-        // could be they didn't log in through a server restart
-        const resObj={
-          meta: {
-            code: 401,
-            error_message: "Call requires authentication: Authentication required to fetch token."
-          }
-        };
-        return sendresponse(resObj, res);
-      }
-      cb(usertoken)
-    })
+    });
+  });
+
+  const validUser = (token, res, cb) => {
+    return new Promise((resolve, rej) => {
+      app.dispatcher.getUserClientByToken(token, (usertoken, err) => {
+        if (err) {
+          console.error('token err', err);
+          const resObj={
+            meta: {
+              code: 500,
+              error_message: err
+            }
+          };
+          sendresponse(resObj, res);
+          return rej();
+        }
+        if (usertoken === null) {
+          // could be they didn't log in through a server restart
+          const resObj={
+            meta: {
+              code: 401,
+              error_message: "Call requires authentication: Authentication required to fetch token."
+            }
+          };
+          sendresponse(resObj, res);
+          return rej();
+        }
+        if (cb) cb(usertoken)
+        resolve(usertoken)
+      });
+    });
   }
 
-  function validGlobal(token, res, cb) {
-    validUser(token, res, function(usertoken) {
-      const list = user_access[usertoken.userid]
+  const validGlobal = (token, res, cb) => {
+    validUser(token, res, (usertoken) => {
+      const list = user_access[usertoken.userid];
       if (!list) {
         // not even on the list
         const resObj={
@@ -366,14 +413,14 @@ module.exports=function mount(app, prefix) {
         return sendresponse(resObj, res);
       }
       if (list.match && list.match(/,/)) {
-        return cb(usertoken, list.split(/,/))
+        return cb(usertoken, list.split(/,/));
       }
-      cb(usertoken, true)
-    })
+      cb(usertoken, true);
+    });
   }
 
   app.get(prefix + '/loki/v1/user_info', (req, res) => {
-    validUser(req.token, res, function(usertoken) {
+    validUser(req.token, res, (usertoken) => {
       //console.log('usertoken',  JSON.stringify(usertoken))
       const resObj={
         meta: {
@@ -389,37 +436,39 @@ module.exports=function mount(app, prefix) {
         }
       };
       return sendresponse(resObj, res);
-    })
-  })
+    });
+  });
 
-  app.get(prefix + '/loki/v1/channel/:id/deletes', (req, res) => {
+  const deletesHandler = (req, res) => {
     const numId = parseInt(req.params.id);
     //console.log('numId', numId)
-    cache.getChannelDeletions(numId, req.apiParams, function(interactions, err, meta) {
-      //console.log('interactions', interactions)
-      var items = []
-      for(var i in interactions) {
-        items.push({
-          delete_at: interactions[i].datetime,
-          message_id: interactions[i].typeid,
-          id: interactions[i].id
-        })
-      }
+    cache.getChannelDeletions(numId, req.apiParams, (interactions, err, meta) => {
+      const items = interactions.map(interaction => ({
+        delete_at: interaction.datetime,
+        message_id: interaction.typeid,
+        id: interaction.id
+      }));
       const resObj={
         meta: meta,
         data: items
       };
       return sendresponse(resObj, res);
     })
-  })
+  }
+
+  // backwards compatibilty
+  app.get(prefix + '/loki/v1/channel/:id/deletes', deletesHandler);
+  // new official URL to keep it consistent
+  app.get(prefix + '/loki/v1/channels/:id/deletes', deletesHandler);
+
 
   app.delete(prefix + '/loki/v1/moderation/message/:id', (req, res) => {
-    validGlobal(req.token, res, function(usertoken, access_list) {
+    validGlobal(req.token, res, (usertoken, access_list) => {
       // FIXME: support comma-separate list of IDs
 
       // get message channel
-      var numId = parseInt(req.params.id);
-      cache.getMessage(numId, function(message, getErr) {
+      const numId = parseInt(req.params.id);
+      cache.getMessage(numId, (message, getErr) => {
         // handle errors
         if (getErr) {
           console.error('getMessage err', getErr);
@@ -445,8 +494,8 @@ module.exports=function mount(app, prefix) {
         // if not full access
         if (access_list !== true) {
           // see if this message's channel is on the list
-          var allowed = access_list.indexOf(message.channel_id);
-          if (allowed == -1) {
+          const allowed = access_list.indexOf(message.channel_id);
+          if (allowed === -1) {
             // not allowed to manage this channel
             const resObj={
               meta: {
@@ -459,7 +508,7 @@ module.exports=function mount(app, prefix) {
         }
 
         // carry out deletion
-        cache.deleteMessage(message.id, message.channel_id, function(message, delErr) {
+        cache.deleteMessage(message.id, message.channel_id, (message, delErr) => {
           // handle errors
           if (delErr) {
             console.error('deleteMessage err', delErr);
@@ -481,9 +530,9 @@ module.exports=function mount(app, prefix) {
             }
           };
           return sendresponse(resObj, res);
-        })
-      })
-    })
+        });
+      });
+    });
 
-  })
+  });
 }
