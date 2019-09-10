@@ -13,7 +13,7 @@ set up instructions may look something like
 ```
 git submodule init
 git submodule update
-cp loki-template.ini loki.ini
+cp loki_template.ini loki.ini
 # edit loki.ini
 npm i -g pm2
 npm i
