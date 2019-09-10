@@ -107,7 +107,7 @@ function get_challenge(ourKey, ourPubKeyHex) {
   return new Promise((resolve, rej) => {
     describe(`get challenge for ${ourPubKeyHex} /loki/v1/get_challenge`, async () => {
       // this can be broken into more it() if desired
-      it("returns status code 200", async () => {
+      //it("returns status code 200", async () => {
         const result = await overlayApi.serverRequest('loki/v1/get_challenge', {
           params: {
            pubKey: ourPubKeyHex
@@ -134,15 +134,15 @@ function get_challenge(ourKey, ourPubKeyHex) {
         const tokenString = token.toString('utf8');
         //console.log('tokenString', tokenString);
         resolve(tokenString);
-      });
+      //});
     });
   });
 }
 
 function submit_challenge(tokenString) {
   return new Promise((resolve, rej) => {
-    describe(`submit challenge for ${tokenString} /loki/v1/submit_challenge`, function() {
-      it("returns status code 200", async () => {
+    describe(`submit challenge for ${tokenString} /loki/v1/submit_challenge`, async () => {
+      //it("returns status code 200", async () => {
         const result = await overlayApi.serverRequest('loki/v1/submit_challenge', {
           method: 'POST',
           objBody: {
@@ -155,7 +155,7 @@ function submit_challenge(tokenString) {
         // body should be ''
         //console.log('submit challenge body', body);
         resolve();
-      });
+      //});
     });
   });
 }
@@ -163,8 +163,8 @@ function submit_challenge(tokenString) {
 // requires overlayApi to be configured with a token
 function user_info() {
   return new Promise((resolve, rej) => {
-    describe("get user_info /loki/v1/user_info", () => {
-      it("returns status code 200", async () => {
+    describe("get user_info /loki/v1/user_info", async () => {
+      //it("returns status code 200", async () => {
         const result = await overlayApi.serverRequest('loki/v1/user_info');
         assert.equal(200, result.statusCode);
         //console.log('get user_info body', body);
@@ -173,27 +173,27 @@ function user_info() {
         //"scopes":"basic stream write_post follow messages update_profile files export",
         //"created_at":"2019-09-09T01:15:06.000Z","expires_at":"2019-09-09T02:15:06.000Z"}}
         resolve();
-      });
+      //});
     });
   });
 }
 
 function get_deletes(channelId) {
   return new Promise((resolve, rej) => {
-    describe("get deletes /loki/v1/channel/1/deletes", () => {
-      it("returns status code 200", async () => {
+    describe("get deletes /loki/v1/channel/1/deletes", async () => {
+      //it("returns status code 200", async () => {
         const result = await overlayApi.serverRequest('loki/v1/channel/1/deletes');
         assert.equal(200, result.statusCode);
         resolve();
-      });
+      //});
     });
   });
 }
 
 function create_message(channelId) {
   return new Promise((resolve, rej) => {
-    describe("create message /channels/1/messages", () => {
-      it("returns status code 200", async () => {
+    describe("create message /channels/1/messages", async () => {
+      //it("returns status code 200", async () => {
         // create a dummy message
         const result = await platformApi.serverRequest('channels/1/messages', {
           method: 'POST',
@@ -203,7 +203,7 @@ function create_message(channelId) {
         });
         assert.equal(200, result.statusCode);
         resolve(result.response.data.id);
-      });
+      //});
     });
   });
 }
@@ -226,8 +226,8 @@ function admin_create_channel() {
   return new Promise((resolve, rej) => {
     // well this should at least not fail...
     // but not really the target of our testing...
-    describe(`create channel /channels`, () => {
-      it("returns status code 200", async () => {
+    describe(`create channel /channels`, async () => {
+      //it("returns status code 200", async () => {
         // create a dummy message
         const result = await platformApi.serverRequest('channels', {
           method: 'POST',
@@ -237,15 +237,15 @@ function admin_create_channel() {
         });
         assert.equal(200, result.statusCode);
         resolve(result.response.data.id);
-      });
+      //});
     });
   });
 }
 
 function mod_delete_message(channelId, messageId) {
   return new Promise((resolve, rej) => {
-    describe("modDelete message /loki/v1/moderation/message/" + messageId, ()  =>{
-      it("returns status code 200", async () => {
+    describe("modDelete message /loki/v1/moderation/message/" + messageId, async () =>{
+      //it("returns status code 200", async () => {
         // test delete endpoint
         const result = await overlayApi.serverRequest('loki/v1/moderation/message/'+messageId, {
           method: 'DELETE',
@@ -258,17 +258,17 @@ function mod_delete_message(channelId, messageId) {
         //"created_at":"2019-09-09T01:15:06.000Z","expires_at":"2019-09-09T02:15:06.000Z"}}
         resolve();
       });
-    });
+    //});
   });
 }
 
 const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
-  describe(`ensurePlatformServer`, () => {
+  describe('ensurePlatformServer', async () => {
     it('make sure we have something to storage with', async () => {
       await ensurePlatformServer();
     });
   });
-  describe(`ensurePlatformServer`, () => {
+  describe('ensureOverlayServer', async () => {
     it('make sure we have something to test', async () => {
       await ensureOverlayServer();
     });
@@ -276,35 +276,66 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
   let channelId = 2; // default channel to try to test first
 
   // get our token
-  const tokenString = await get_challenge(ourKey, ourPubKeyHex);
-  // activate token
-  await submit_challenge(tokenString);
-  // set token
-  overlayApi.token = tokenString;
-  platformApi.token = tokenString;
+  let tokenString
+  describe('get our token', () => {
+    it('get token', async () => {
+      tokenString = await get_challenge(ourKey, ourPubKeyHex);
+    });
+    it('activate token', async () => {
+      // activate token
+      await submit_challenge(tokenString);
+    });
+    it('set token', async () => {
+      // set token
+      overlayApi.token = tokenString;
+      platformApi.token = tokenString;
+    });
 
-  // make sure we have a channel to test with
-  const chnlCheck = await get_channel(channelId);
-  if (Array.isArray(chnlCheck)) {
-    // make a channel for testing
-    channelId = await admin_create_channel();
-  }
+    it('user info', async () => {
+      // test token endpoints
+      user_info(tokenString);
+    });
 
-  // test token endpoints
-  user_info(tokenString);
-  get_deletes(channelId);
-  // well we need to create a new message for moderation test
-  const messageId = await create_message(channelId);
-  //console.log('messageId', messageId);
+    // make sure we have a channel to test with
+    describe(`channel testing`, () => {
+      it('make sure we have a channel to test', async () => {
+        const chnlCheck = await get_channel(channelId);
+        if (Array.isArray(chnlCheck)) {
+          // make a channel for testing
+          channelId = await admin_create_channel();
+        }
+      });
+      let modToken
+      it('we have moderator to test with', async () => {
+        // now do moderation tests
+        modToken = await selectModToken();
+        if (!modToken) {
+          console.error('No modToken, skipping moderation tests');
+          // all tests should be complete
+          process.exit(0);
+          return;
+        }
+        overlayApi.token = modToken;
+      });
+      let messageId
+      it('create message to test with', async () => {
+        // well we need to create a new message for moderation test
+        messageId = await create_message(channelId);
+        //console.log('messageId', messageId);
+      });
+      it('mod delete test', async () => {
+        await mod_delete_message(channelId, messageId);
+      });
+      it('can get deletes for channel', () => {
+        get_deletes(channelId);
+      });
+    });
+  });
 
-  // now do moderation tests
-  const modToken = await selectModToken();
-  if (!modToken) {
-    console.error('No modToken, skipping moderation tests');
-    return;
-  }
-  overlayApi.token = modToken;
-  mod_delete_message(channelId, messageId);
+  // all tests should be complete
+  //console.log('all done!')
+  //process.exit(0);
 }
 
+//console.log('bob');
 runIntegrationTests(ourKey, ourPubKeyHex);
