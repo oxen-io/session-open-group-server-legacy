@@ -1,0 +1,10 @@
+language: node_js
+node_js:
+- 10
+- "stable"
+
+before_script:
+- git submodule init
+- git submodule update
+- npm install
+cache: npm
