@@ -273,7 +273,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       await ensureOverlayServer();
     });
   });
-  let channelId = 2; // default channel to try to test first
+  let channelId = 3; // default channel to try to test first
 
   // get our token
   let tokenString
@@ -298,36 +298,42 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
 
     // make sure we have a channel to test with
     describe(`channel testing`, () => {
-      it('make sure we have a channel to test', async () => {
+      it('make sure we have a channel to test', async (done) => {
         const chnlCheck = await get_channel(channelId);
         if (Array.isArray(chnlCheck)) {
           // make a channel for testing
           channelId = await admin_create_channel();
+          console.log('created channel', channelId);
         }
+        done();
       });
       let modToken
-      it('we have moderator to test with', async () => {
+      it('we have moderator to test with', async (done) => {
         // now do moderation tests
         modToken = await selectModToken();
         if (!modToken) {
           console.error('No modToken, skipping moderation tests');
           // all tests should be complete
-          process.exit(0);
+          //process.exit(0);
           return;
         }
         overlayApi.token = modToken;
+        done();
       });
       let messageId
-      it('create message to test with', async () => {
+      it('create message to test with', async (done) => {
         // well we need to create a new message for moderation test
         messageId = await create_message(channelId);
         //console.log('messageId', messageId);
+        done();
       });
-      it('mod delete test', async () => {
+      it('mod delete test', async (done) => {
         await mod_delete_message(channelId, messageId);
+        done();
       });
-      it('can get deletes for channel', () => {
+      it('can get deletes for channel', (done) => {
         get_deletes(channelId);
+        done();
       });
     });
   });
