@@ -318,7 +318,6 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           return;
         }
         overlayApi.token = modToken;
-        done();
       });
       let messageId
       it('create message to test with', async () => {
