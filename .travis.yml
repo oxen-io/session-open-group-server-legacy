@@ -5,4 +5,6 @@ node_js:
 
 before_script:
 - npm install
+- cp loki-template.ini loki.ini
+- cp server/config.sample.json server/config.json
 cache: npm
