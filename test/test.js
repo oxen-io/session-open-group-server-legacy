@@ -4,6 +4,7 @@ const nconf = require('nconf');
 const request = require('request');
 const assert = require('assert');
 const ini = require('loki-launcher/ini');
+const lokinet = require('loki-launcher/lokinet');
 const crypto = require('crypto');
 const bb = require('bytebuffer');
 const libsignal = require('libsignal');
@@ -21,6 +22,16 @@ const overlay_url = 'http://localhost:' + overlay_port + '/';
 
 const platform_api_url = disk_config.api.api_url;
 const platform_admin_url = disk_config.api.admin_url.replace(/\/$/, '');
+
+const platformURL = new URL(platform_api_url);
+console.log('platform port', platformURL.port);
+lokinet.portIsFree(platformURL.hostname, platformURL.port, function(free) {
+  if (free) {
+    const startPlatform = require('../server/app');
+  } else {
+    console.log('detected running server');
+  }
+})
 
 const IV_LENGTH = 16;
 
