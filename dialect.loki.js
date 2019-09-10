@@ -332,6 +332,22 @@ module.exports = (app, prefix) => {
     });
   });
 
+  app.get(prefix + '/loki/v1/channel/:id/get_moderators', async (req, res) => {
+    const channelId = parseInt(req.params.id);
+    const roles = {
+      moderators: [],
+    };
+    for (const userid in user_access) {
+      try {
+        const user = await getUser(userid);
+        roles.moderators.push(user.username);
+      } catch (e) {
+        console.error(`Errer getting user: ${e}`);
+      }
+    }
+    res.status(200).type('application/json').end(JSON.stringify(roles));
+  });
+
   app.post(prefix + '/loki/v1/submit_challenge', (req, res) => {
     const { pubKey, token } = req.body;
     if (!pubKey) {
@@ -367,6 +383,18 @@ module.exports = (app, prefix) => {
       }
     });
   });
+
+  const getUser = (userid) => {
+    return new Promise((res, rej) => {
+      cache.getUser(userid, (user, err) => {
+        if (user) {
+          res(user);
+        } else {
+          rej(err);
+        }
+      });
+    });
+  }
 
   const validUser = (token, res, cb) => {
     return new Promise((resolve, rej) => {
