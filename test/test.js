@@ -72,6 +72,7 @@ let modPubKey = '';
 
 // grab a mod from ini
 const selectModToken = async () => {
+  if (!disk_config.globals) return;
   const modKeys = Object.keys(disk_config.globals);
   if (!modKeys.length) {
     console.warn('no moderators configured, skipping moderation tests');
@@ -298,17 +299,16 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
 
     // make sure we have a channel to test with
     describe(`channel testing`, () => {
-      it('make sure we have a channel to test', async (done) => {
+      it('make sure we have a channel to test', async () => {
         const chnlCheck = await get_channel(channelId);
         if (Array.isArray(chnlCheck)) {
           // make a channel for testing
           channelId = await admin_create_channel();
           console.log('created channel', channelId);
         }
-        done();
       });
       let modToken
-      it('we have moderator to test with', async (done) => {
+      it('we have moderator to test with', async () => {
         // now do moderation tests
         modToken = await selectModToken();
         if (!modToken) {
@@ -321,19 +321,18 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
         done();
       });
       let messageId
-      it('create message to test with', async (done) => {
+      it('create message to test with', async () => {
         // well we need to create a new message for moderation test
         messageId = await create_message(channelId);
         //console.log('messageId', messageId);
-        done();
       });
-      it('mod delete test', async (done) => {
-        await mod_delete_message(channelId, messageId);
-        done();
+      it('mod delete test', async () => {
+        if (modToken && messageId) {
+          await mod_delete_message(channelId, messageId);
+        }
       });
-      it('can get deletes for channel', (done) => {
+      it('can get deletes for channel', () => {
         get_deletes(channelId);
-        done();
       });
     });
   });
