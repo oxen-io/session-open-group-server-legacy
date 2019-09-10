@@ -29,7 +29,15 @@ lokinet.portIsFree(platformURL.hostname, platformURL.port, function(free) {
   if (free) {
     const startPlatform = require('../server/app');
   } else {
-    console.log('detected running server');
+    console.log('detected running platform server using that');
+  }
+})
+console.log('overlay port', overlay_port);
+lokinet.portIsFree('localhost', overlay_port, function(free) {
+  if (free) {
+    const startPlatform = require('../overlay_server');
+  } else {
+    console.log('detected running overlay server testing that');
   }
 })
 
