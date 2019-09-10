@@ -14,11 +14,31 @@ disk_config = ini.iniToJSON(ini_bytes.toString());
 //console.log('disk_config', disk_config)
 const overlay_port = parseInt(disk_config.api.port) || 8080;
 
-const config_path = path.join('../sapphire-platform-server/config.json');
+const config_path = path.join('./server/config.json');
 nconf.argv().env('__').file({file: config_path});
 
-const cache = require('../sapphire-platform-server/dataaccess.caminte.js');
-cache.start(nconf);
+// const cache = require('../sapphire-platform-server/dataaccess.caminte.js');
+// cache.start(nconf);
+
+// configure the admin interface for use
+// can be easily swapped out later
+const proxyAdmin = require('./server/dataaccess.proxy-admin');
+// fake dispatcher that only implements what we need
+proxyAdmin.dispatcher = {
+  updateUser: (user, ts, cb) => { cb(user); },
+  setMessage: (message, cb) => { if (cb) cb(message); },
+}
+proxyAdmin.apiroot = disk_config.api.api_url;
+if (proxyAdmin.apiroot.replace) {
+  proxyAdmin.apiroot = proxyAdmin.apiroot.replace(/\/$/, '');
+}
+proxyAdmin.adminroot = disk_config.api.admin_url;
+if (proxyAdmin.adminroot.replace) {
+  proxyAdmin.adminroot = proxyAdmin.adminroot.replace(/\/$/, '');
+}
+
+// chose how you want to access it
+const dataAccess = 1?proxyAdmin:cache;
 
 // need this for POST parsing
 app.use(bodyParser.json());
@@ -107,9 +127,9 @@ app.all('/*', (req, res, next) => {
 
 // create a fake dispatcher
 app.dispatcher={
-  cache: cache,
+  cache: dataAccess,
   getUserClientByToken: function(token, cb) {
-    cache.getAPIUserToken(token, cb);
+    dataAccess.getAPIUserToken(token, cb);
   }
 };
 const lokiDialectMount = require('./dialect.loki');
