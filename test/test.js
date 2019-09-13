@@ -191,6 +191,19 @@ function get_deletes(channelId) {
   });
 }
 
+function get_moderators(channelId) {
+  return new Promise((resolve, rej) => {
+    describe("get moderators /loki/v1/channel/1/get_moderators", async () => {
+      //it("returns status code 200", async () => {
+        const result = await overlayApi.serverRequest('loki/v1/channel/1/get_moderators');
+        assert.equal(200, result.statusCode);
+        resolve();
+      //});
+    });
+  });
+}
+
+
 function create_message(channelId) {
   return new Promise((resolve, rej) => {
     describe("create message /channels/1/messages", async () => {
@@ -332,6 +345,9 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       });
       it('can get deletes for channel', () => {
         get_deletes(channelId);
+      });
+      it('can get moderators for channel', () => {
+        get_moderators(channelId);
       });
     });
   });
