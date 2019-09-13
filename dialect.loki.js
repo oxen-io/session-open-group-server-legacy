@@ -286,6 +286,7 @@ module.exports = (app, prefix) => {
           }
         })
       }
+      // user_access will always be empty here because async
     }
   }
   updateUserAccess();
@@ -337,14 +338,11 @@ module.exports = (app, prefix) => {
     const roles = {
       moderators: [],
     };
-    for (const userid in user_access) {
-      try {
-        const user = await getUser(userid);
-        roles.moderators.push(user.username);
-      } catch (e) {
-        console.error(`Errer getting user: ${e}`);
-      }
-    }
+    const userids = Object.keys(user_access);
+    const userAdnObjects = await getUsers(userids);
+    roles.moderators = userAdnObjects.map(obj => {
+      return obj.username;
+    });
     res.status(200).type('application/json').end(JSON.stringify(roles));
   });
 
@@ -395,6 +393,23 @@ module.exports = (app, prefix) => {
       });
     });
   }
+
+  const getUsers = (userids) => {
+    // FIXME: support more than 200 user IDs
+    if (userids.length > 200) {
+      console.error('Too many moderators');
+    }
+    return new Promise((res, rej) => {
+      cache.getUsers(userids, {}, (user, err) => {
+        if (user) {
+          res(user);
+        } else {
+          rej(err);
+        }
+      });
+    });
+  }
+
 
   const validUser = (token, res, cb) => {
     return new Promise((resolve, rej) => {
