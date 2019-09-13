@@ -333,7 +333,7 @@ module.exports = (app, prefix) => {
     });
   });
 
-  app.get(prefix + '/loki/v1/channel/:id/get_moderators', async (req, res) => {
+  const getChannelModeratorsHandler = async (req, res) => {
     const channelId = parseInt(req.params.id);
     const roles = {
       moderators: [],
@@ -344,7 +344,12 @@ module.exports = (app, prefix) => {
       return obj.username;
     });
     res.status(200).type('application/json').end(JSON.stringify(roles));
-  });
+  }
+
+  // legacy
+  app.get(prefix + '/loki/v1/channel/:id/get_moderators', getChannelModeratorsHandler);
+  // new official
+  app.get(prefix + '/loki/v1/channels/:id/moderators', getChannelModeratorsHandler);
 
   app.post(prefix + '/loki/v1/submit_challenge', (req, res) => {
     const { pubKey, token } = req.body;
