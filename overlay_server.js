@@ -30,6 +30,10 @@ proxyAdmin.dispatcher = {
   // ignore local message updates
   setMessage: (message, cb) => { if (cb) cb(message); },
 }
+// backward compatible
+if (proxyAdmin.start) {
+  proxyAdmin.start(nconf);
+}
 proxyAdmin.apiroot = disk_config.api.api_url;
 if (proxyAdmin.apiroot.replace) {
   proxyAdmin.apiroot = proxyAdmin.apiroot.replace(/\/$/, '');
