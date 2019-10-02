@@ -97,6 +97,7 @@ const findToken = (token) => {
         return rej(err);
       }
       // report back existence
+      //console.log('backend has token', usertoken?true:false, token);
       res(usertoken?true:false);
     });
   });
@@ -118,6 +119,7 @@ const createToken = (pubKey) => {
   return new Promise((res, rej) => {
     findOrCreateUser(pubKey)
       .then(async user => {
+        //console.log('Creating token for', user.id)
         // generate new random token and make sure it's not in use
         let inUse = true;
         while(inUse) {
@@ -139,6 +141,7 @@ const findOrCreateUser = (pubKey) => {
         rej(err);
         return;
       }
+      //console.log('findOrCreateUser', pubKey, 'new', user === null);
       if (user === null) {
         // create user
         // "password" (2nd) parameter is not saved/used
@@ -146,11 +149,13 @@ const findOrCreateUser = (pubKey) => {
           if (err2) {
             rej(err2);
           } else {
+            //console.log('passing back newly created', newUser)
             res(newUser);
           }
         })
       } else {
         // we have this user
+        //console.log('findOrCreateUser', user)
         res(user);
       }
     });
@@ -223,12 +228,15 @@ const confirmToken = (pubKey, token) => {
     if (!userObj) {
       return rej('user');
     }
+    //console.log('confirming token for user', userObj.id);
     // promote token to usable for user
     cache.addUnconstrainedAPIUserToken(userObj.id, 'messenger', ADN_SCOPES, token, TOKEN_TTL_MINS, (tokenObj, err) => {
       if (err) {
         // we'll keep the token in the temp storage, so they can retry
         return rej('tokenCreation');
       }
+      // if no, err we assume everything is fine...
+      //console.log('addUnconstrainedAPIUserToken result', tokenObj)
       // ok token is now registered
       // remove from temp storage
       deleteTempStorageForToken(pubKey, token);
@@ -278,7 +286,7 @@ module.exports = (app, prefix) => {
         const access = disk_config.globals[pubKey];
         // translate pubKey to id of user
         cache.getUserID(pubKey, (user, err) => {
-          //console.log('setting', user.id, 'to', access);
+          console.log('setting', user.id, 'to', access);
 
           // only if user has registered
           if (user) {
@@ -339,7 +347,13 @@ module.exports = (app, prefix) => {
       moderators: [],
     };
     const userids = Object.keys(user_access);
-    const userAdnObjects = await getUsers(userids);
+    let userAdnObjects = []
+    try {
+      userAdnObjects = await getUsers(userids);
+    } catch(e) {
+      console.error(`Error getting users ${userids}`);
+      return res.status(500).type('application/json').end(JSON.stringify(roles));
+    }
     roles.moderators = userAdnObjects.map(obj => {
       return obj.username;
     });
@@ -390,6 +404,7 @@ module.exports = (app, prefix) => {
   const getUser = (userid) => {
     return new Promise((res, rej) => {
       cache.getUser(userid, (user, err) => {
+        //console.log('getUser', user)
         if (user) {
           res(user);
         } else {
@@ -400,18 +415,28 @@ module.exports = (app, prefix) => {
   }
 
   const getUsers = (userids) => {
-    // FIXME: support more than 200 user IDs
-    if (userids.length > 200) {
-      console.error('Too many moderators');
-    }
     return new Promise((res, rej) => {
-      cache.getUsers(userids, {}, (user, err) => {
-        if (user) {
-          res(user);
-        } else {
-          rej(err);
-        }
-      });
+      let results = [];
+      let requests = 0;
+      let responses = 0;
+      let next200 = userids.splice(0, 200);
+      while(next200.length) {
+        requests++;
+        // allow them to overlap
+        cache.getUsers(next200, {}, (users, err) => {
+          if (err) {
+            return rej(err);
+          }
+          // console.log('getUsers', users)
+          results = results.concat(users);
+          responses++;
+          if (requests === responses) {
+            // console.log('results', results);
+            return res(results);
+          }
+        });
+        next200 = userids.splice(0, 200);
+      }
     });
   }
 
