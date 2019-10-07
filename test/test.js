@@ -181,15 +181,28 @@ function user_info() {
 
 function get_deletes(channelId) {
   return new Promise((resolve, rej) => {
-    describe("get deletes /loki/v1/channel/1/deletes", async () => {
+    describe("get deletes /loki/v1/channels/1/deletes", async () => {
       //it("returns status code 200", async () => {
-        const result = await overlayApi.serverRequest('loki/v1/channel/1/deletes');
+        const result = await overlayApi.serverRequest('loki/v1/channels/1/deletes');
         assert.equal(200, result.statusCode);
         resolve();
       //});
     });
   });
 }
+
+function get_moderators(channelId) {
+  return new Promise((resolve, rej) => {
+    describe("get moderators /loki/v1/channels/1/moderators", async () => {
+      //it("returns status code 200", async () => {
+        const result = await overlayApi.serverRequest('loki/v1/channels/1/moderators');
+        assert.equal(200, result.statusCode);
+        resolve();
+      //});
+    });
+  });
+}
+
 
 function create_message(channelId) {
   return new Promise((resolve, rej) => {
@@ -332,6 +345,9 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       });
       it('can get deletes for channel', () => {
         get_deletes(channelId);
+      });
+      it('can get moderators for channel', () => {
+        get_moderators(channelId);
       });
     });
   });

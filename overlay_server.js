@@ -25,8 +25,14 @@ nconf.argv().env('__').file({file: config_path});
 const proxyAdmin = require('./server/dataaccess.proxy-admin');
 // fake dispatcher that only implements what we need
 proxyAdmin.dispatcher = {
+  // ignore local user updates
   updateUser: (user, ts, cb) => { cb(user); },
+  // ignore local message updates
   setMessage: (message, cb) => { if (cb) cb(message); },
+}
+// backward compatible
+if (proxyAdmin.start) {
+  proxyAdmin.start(nconf);
 }
 proxyAdmin.apiroot = disk_config.api.api_url;
 if (proxyAdmin.apiroot.replace) {
