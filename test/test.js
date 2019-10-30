@@ -358,7 +358,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
     });
 
     // make sure we have a channel to test with
-    describe(`channel testing`, () => {
+    describe('channel testing', () => {
       it('make sure we have a channel to test', async () => {
         const chnlCheck = await get_channel(channelId);
         if (Array.isArray(chnlCheck)) {
@@ -366,18 +366,6 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           channelId = await admin_create_channel();
           console.log('created channel', channelId);
         }
-      });
-      let modToken
-      it('we have moderator to test with', async () => {
-        // now do moderation tests
-        modToken = await selectModToken();
-        if (!modToken) {
-          console.error('No modToken, skipping moderation tests');
-          // all tests should be complete
-          //process.exit(0);
-          return;
-        }
-        overlayApi.token = modToken;
       });
       let messageId, messageId1, messageId2, messageId3, messageId4
       it('create message to test with', async () => {
@@ -388,18 +376,6 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
         messageId3 = await create_message(channelId);
         messageId4 = await create_message(channelId);
         //console.log('messageId', messageId);
-      });
-      it('mod delete test', async () => {
-        if (modToken && messageId) {
-          await mod_delete_message(channelId, messageId);
-        }
-      });
-      it('mod multi delete test', async () => {
-        if (modToken && messageId1 && messageId2) {
-          await mod_multi_delete_message(channelId, [messageId1, messageId2]);
-        } else {
-          console.log('skipping')
-        }
       });
       it('user multi delete test', async () => {
         if (messageId3 && messageId4) {
@@ -413,6 +389,33 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       });
       it('can get moderators for channel', () => {
         get_moderators(channelId);
+      });
+      // Moderator only functions
+      describe('channel moderator testing', () => {
+        let modToken
+        it('we have moderator to test with', async () => {
+          // now do moderation tests
+          modToken = await selectModToken();
+          if (!modToken) {
+            console.error('No modToken, skipping moderation tests');
+            // all tests should be complete
+            //process.exit(0);
+            return;
+          }
+          overlayApi.token = modToken;
+        });
+        it('mod delete test', async () => {
+          if (modToken && messageId) {
+            await mod_delete_message(channelId, messageId);
+          }
+        });
+        it('mod multi delete test', async () => {
+          if (modToken && messageId1 && messageId2) {
+            await mod_multi_delete_message(channelId, [messageId1, messageId2]);
+          } else {
+            console.log('skipping')
+          }
+        });
       });
     });
   });
