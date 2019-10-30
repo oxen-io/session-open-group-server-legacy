@@ -625,7 +625,7 @@ const getMessages = (ids) => {
         // check our permission
         if (!msg || !msg.user) {
           // not even on the list
-          console.log('no message or user object', msg);
+          console.warn('no message or user object', msg);
           const resObj={
             meta: {
               code: 500,
@@ -638,7 +638,7 @@ const getMessages = (ids) => {
         }
         if (msg.user.id !== usertoken.userid) {
           // not even on the list
-          console.log('user', usertoken.userid, 'tried to delete', msg.user.id, 'message', msg);
+          console.warn('user', usertoken.userid, 'tried to delete users', msg.user.id, 'message', msg.id);
           const resObj={
             meta: {
               code: 403,
@@ -721,7 +721,7 @@ const modTryDeleteMessages = (ids, access_list) => {
 
   app.delete(prefix + '/loki/v1/moderation/messages', (req, res) => {
     if (!req.query.ids) {
-      console.log('moderation message mass delete ids empty');
+      console.warn('moderation message mass delete ids empty');
       res.status(422).type('application/json').end(JSON.stringify({
         error: 'ids missing',
       }));
@@ -735,7 +735,7 @@ const modTryDeleteMessages = (ids, access_list) => {
       ids = [ ids ];
     }
     if (ids.length > 200) {
-      console.log('moderation message mass delete too many ids, 200<', ids.length);
+      console.warn('moderation message mass delete too many ids, 200<', ids.length);
       res.status(422).type('application/json').end(JSON.stringify({
         error: 'too many ids',
       }));
