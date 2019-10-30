@@ -286,11 +286,13 @@ module.exports = (app, prefix) => {
         const access = disk_config.globals[pubKey];
         // translate pubKey to id of user
         cache.getUserID(pubKey, (user, err) => {
-          console.log('setting', user.id, 'to', access);
-
+          if (err) console.error(err);
           // only if user has registered
           if (user) {
+            console.log('setting', user.id, 'to', access);
             user_access[user.id] = access;
+          } else {
+            console.warn('no user object for', pubKey);
           }
         })
       }
@@ -539,7 +541,7 @@ const tryDeleteMessage = (numId, access_list) => {
     cache.getMessage(numId, (message, getErr) => {
       // handle errors
       if (getErr) {
-        console.error('getMessage err', getErr);
+        console.error('tryDeleteMessage getMessage err', getErr);
         const resObj={
           meta: {
             code: 500,
@@ -574,12 +576,13 @@ const tryDeleteMessage = (numId, access_list) => {
           return resolve(resObj);
         }
       }
+      //console.log('tryDeleteMessage message', message)
 
       // carry out deletion
       cache.deleteMessage(message.id, message.channel_id, (message, delErr) => {
         // handle errors
         if (delErr) {
-          console.error('deleteMessage err', delErr);
+          console.error('tryDeleteMessage mod deleteMessage err', delErr);
           const resObj={
             meta: {
               code: 500,
@@ -588,7 +591,6 @@ const tryDeleteMessage = (numId, access_list) => {
           };
           return resolve(resObj);
         }
-        //console.log('usertoken',  JSON.stringify(usertoken))
         const resObj={
           meta: {
             code: 200,
@@ -604,11 +606,119 @@ const tryDeleteMessage = (numId, access_list) => {
   });
 }
 
+  app.delete(prefix + '/loki/v1/messages', (req, res) => {
+    if (!req.query.ids) {
+      console.log('moderation message mass delete ids empty');
+      res.status(422).type('application/json').end(JSON.stringify({
+        error: 'ids missing',
+      }));
+      return;
+    }
+    let ids = req.query.ids;
+    if (ids && ids.match(/,/)) {
+      ids = ids.split(/,/)
+    }
+    if (typeof(ids) === 'string') {
+      ids = [ ids ];
+    }
+    if (ids.length > 200) {
+      console.log('moderation message mass delete too many ids, 200<', ids.length);
+      res.status(422).type('application/json').end(JSON.stringify({
+        error: 'too many ids',
+      }));
+      return;
+    }
+    validUser(req.token, res, (usertoken) => {
+      cache.getMessage(ids, (messages, getErr) => {
+        // handle errors
+        if (getErr) {
+          console.error('getMessage err', getErr);
+          const resObj={
+            meta: {
+              code: 500,
+              error_message: getErr
+            }
+          };
+          sendresponse(resObj, res);
+        }
+        if (!messages || !messages.length) {
+          const resObj={
+            meta: {
+              code: 410,
+              error_message: 'no messages found'
+            }
+          };
+          sendresponse(resObj, res);
+        }
+        // single result
+        if (!Array.isArray(messages)) {
+          messages = [messages]
+        }
+        const metas = []
+        const datas = []
+        messages.forEach(async (msg) => {
+          // check our permission
+          if (msg.userid != usertoken.userid) {
+            // not even on the list
+            const resObj={
+              meta: {
+                code: 401,
+                error_message: "Call requires authentication: Authentication required to fetch token."
+              },
+            };
+            metas.push(resObj.meta);
+            datas.push(msg);
+            return;
+          }
+          // we're allowed to nuke it & carry out deletion
+          const resObj = await new Promise((resolve, rej) => {
+            console.log('deleting', msg.id, 'in', msg.channel_id, 'msg', msg)
+            cache.deleteMessage(msg.id, msg.channel_id, (message, delErr) => {
+              // handle errors
+              if (delErr) {
+                console.error('user deleteMessage err', delErr);
+                const resObj={
+                  meta: {
+                    code: 500,
+                    error_message: delErr
+                  },
+                  data: msg
+                };
+                resolve(resObj);
+                return;
+              }
+              const resObj={
+                meta: {
+                  code: 200,
+                },
+                data: msg
+              };
+              resObj.data.is_deleted = true;
+              resolve(resObj);
+            });
+          });
+          metas.push(resObj.meta);
+          datas.push(resObj.data);
+        });
+
+        resObj = {
+          meta: {
+            code: 200,
+            requet: ids,
+            results: metas
+          },
+          data: datas
+        }
+        sendresponse(resObj, res)
+      });
+    });
+  });
+
   app.delete(prefix + '/loki/v1/moderation/messages', (req, res) => {
     if (!req.query.ids) {
       console.log('moderation message mass delete ids empty');
       res.status(422).type('application/json').end(JSON.stringify({
-        error: 'pubKey missing',
+        error: 'ids missing',
       }));
       return;
     }
@@ -629,7 +739,7 @@ const tryDeleteMessage = (numId, access_list) => {
     validGlobal(req.token, res, (usertoken, access_list) => {
       const metas = []
       const datas = []
-      ids.forEach(async id => {
+      ids.forEach(async numId => {
         const resObj = await tryDeleteMessage(numId, access_list);
         resObj.meta.id = numId;
         // ok how do we want to aggregate these results...
@@ -655,7 +765,7 @@ const tryDeleteMessage = (numId, access_list) => {
       // get message channel
       const numId = parseInt(req.params.id);
       resObj = await tryDeleteMessage(numId, access_list);
-      sendresponse(resObj, res)
+      sendresponse(resObj, res);
     });
 
   });
