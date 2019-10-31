@@ -215,6 +215,7 @@ function create_message(channelId) {
             text: 'testing message',
           },
         });
+        //console.log('create message result', result, 'token', platformApi.token);
         assert.equal(200, result.statusCode);
         resolve(result.response.data.id);
       //});
@@ -276,6 +277,52 @@ function mod_delete_message(channelId, messageId) {
   });
 }
 
+function mod_multi_delete_message(channelId, messages) {
+  return new Promise((resolve, rej) => {
+    describe("modDelete message /loki/v1/moderation/messages?ids="+messages.join(','), async () =>{
+      //it("returns status code 200", async () => {
+        // test delete endpoint
+        const result = await overlayApi.serverRequest('loki/v1/moderation/messages', {
+          method: 'DELETE',
+          params: {
+            ids: messages.join(',')
+          }
+        });
+        assert.equal(200, result.statusCode);
+        //console.log('modDelete message body', body);
+        // {"meta":{"code":200},"data":{
+        // "user_id":10,"client_id":"messenger",
+        //"scopes":"basic stream write_post follow messages update_profile files export",
+        //"created_at":"2019-09-09T01:15:06.000Z","expires_at":"2019-09-09T02:15:06.000Z"}}
+        resolve();
+      });
+    //});
+  });
+}
+
+function multi_delete_message(channelId, messages) {
+  return new Promise((resolve, rej) => {
+    describe("delete message /loki/v1/messages?ids="+messages.join(','), async () =>{
+      //it("returns status code 200", async () => {
+        // test delete endpoint
+        const result = await overlayApi.serverRequest('loki/v1/messages', {
+          method: 'DELETE',
+          params: {
+            ids: messages.join(',')
+          }
+        });
+        assert.equal(200, result.statusCode);
+        //console.log('delete message body', body);
+        // {"meta":{"code":200},"data":{
+        // "user_id":10,"client_id":"messenger",
+        //"scopes":"basic stream write_post follow messages update_profile files export",
+        //"created_at":"2019-09-09T01:15:06.000Z","expires_at":"2019-09-09T02:15:06.000Z"}}
+        resolve();
+      });
+    //});
+  });
+}
+
 const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
   describe('ensurePlatformServer', async () => {
     it('make sure we have something to storage with', async () => {
@@ -287,7 +334,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       await ensureOverlayServer();
     });
   });
-  let channelId = 3; // default channel to try to test first
+  let channelId = 1; // default channel to try to test first
 
   // get our token
   let tokenString
@@ -311,7 +358,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
     });
 
     // make sure we have a channel to test with
-    describe(`channel testing`, () => {
+    describe('channel testing', () => {
       it('make sure we have a channel to test', async () => {
         const chnlCheck = await get_channel(channelId);
         if (Array.isArray(chnlCheck)) {
@@ -320,27 +367,21 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           console.log('created channel', channelId);
         }
       });
-      let modToken
-      it('we have moderator to test with', async () => {
-        // now do moderation tests
-        modToken = await selectModToken();
-        if (!modToken) {
-          console.error('No modToken, skipping moderation tests');
-          // all tests should be complete
-          //process.exit(0);
-          return;
-        }
-        overlayApi.token = modToken;
-      });
-      let messageId
+      let messageId, messageId1, messageId2, messageId3, messageId4
       it('create message to test with', async () => {
         // well we need to create a new message for moderation test
         messageId = await create_message(channelId);
+        messageId1 = await create_message(channelId);
+        messageId2 = await create_message(channelId);
+        messageId3 = await create_message(channelId);
+        messageId4 = await create_message(channelId);
         //console.log('messageId', messageId);
       });
-      it('mod delete test', async () => {
-        if (modToken && messageId) {
-          await mod_delete_message(channelId, messageId);
+      it('user multi delete test', async () => {
+        if (messageId3 && messageId4) {
+          await multi_delete_message(channelId, [messageId3, messageId4]);
+        } else {
+          console.log('skipping')
         }
       });
       it('can get deletes for channel', () => {
@@ -348,6 +389,33 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       });
       it('can get moderators for channel', () => {
         get_moderators(channelId);
+      });
+      // Moderator only functions
+      describe('channel moderator testing', () => {
+        let modToken
+        it('we have moderator to test with', async () => {
+          // now do moderation tests
+          modToken = await selectModToken();
+          if (!modToken) {
+            console.error('No modToken, skipping moderation tests');
+            // all tests should be complete
+            //process.exit(0);
+            return;
+          }
+          overlayApi.token = modToken;
+        });
+        it('mod delete test', async () => {
+          if (modToken && messageId) {
+            await mod_delete_message(channelId, messageId);
+          }
+        });
+        it('mod multi delete test', async () => {
+          if (modToken && messageId1 && messageId2) {
+            await mod_multi_delete_message(channelId, [messageId1, messageId2]);
+          } else {
+            console.log('skipping')
+          }
+        });
       });
     });
   });

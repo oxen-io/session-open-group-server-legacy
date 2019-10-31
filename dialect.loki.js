@@ -286,11 +286,13 @@ module.exports = (app, prefix) => {
         const access = disk_config.globals[pubKey];
         // translate pubKey to id of user
         cache.getUserID(pubKey, (user, err) => {
-          console.log('setting', user.id, 'to', access);
-
+          if (err) console.error(err);
           // only if user has registered
           if (user) {
+            console.log('setting', user.id, 'to', access);
             user_access[user.id] = access;
+          } else {
+            console.warn('no user object for', pubKey);
           }
         })
       }
@@ -534,78 +536,223 @@ module.exports = (app, prefix) => {
   // new official URL to keep it consistent
   app.get(prefix + '/loki/v1/channels/:id/deletes', deletesHandler);
 
+const deleteMessage = (msg) => {
+  return new Promise(function(resolve, rej) {
+    // carry out deletion
+    cache.deleteMessage(msg.id, msg.channel_id, (message, delErr) => {
+      // handle errors
+      if (delErr) {
+        console.error('tryDeleteMessage mod deleteMessage err', delErr);
+        const resObj={
+          meta: {
+            code: 500,
+            error_message: delErr
+          }
+        };
+        return resolve(resObj);
+      }
+      const resObj={
+        meta: {
+          code: 200,
+        },
+        data: msg
+      };
+      resObj.data.is_deleted = true;
+      return resolve(resObj);
+    });
+  })
+}
 
-  app.delete(prefix + '/loki/v1/moderation/message/:id', (req, res) => {
-    validGlobal(req.token, res, (usertoken, access_list) => {
-      // FIXME: support comma-separate list of IDs
+const getMessages = (ids) => {
+  return new Promise(function(resolve, rej) {
+    cache.getMessage(ids, (messages, getErr) => {
+      // handle errors
+      if (getErr) {
+        console.error('getMessage err', getErr);
+        return resolve([500, getErr, false]);
+      }
 
-      // get message channel
-      const numId = parseInt(req.params.id);
-      cache.getMessage(numId, (message, getErr) => {
-        // handle errors
-        if (getErr) {
-          console.error('getMessage err', getErr);
+      if (!messages || !messages.length) {
+        return resolve([410, 'no messages', false]);
+      }
+      // single result
+      if (!Array.isArray(messages)) {
+        messages = [messages];
+      }
+      resolve([200, false, messages]);
+    })
+  });
+}
+
+  app.delete(prefix + '/loki/v1/messages', (req, res) => {
+    if (!req.query.ids) {
+      console.log('moderation message mass delete ids empty');
+      res.status(422).type('application/json').end(JSON.stringify({
+        error: 'ids missing',
+      }));
+      return;
+    }
+    let ids = req.query.ids;
+    if (ids && ids.match(/,/)) {
+      ids = ids.split(/,/);
+    }
+    if (typeof(ids) === 'string') {
+      ids = [ ids ];
+    }
+    if (ids.length > 200) {
+      console.log('moderation message mass delete too many ids, 200<', ids.length);
+      res.status(422).type('application/json').end(JSON.stringify({
+        error: 'too many ids',
+      }));
+      return;
+    }
+    validUser(req.token, res, async usertoken => {
+      const [ code, err, messages ] = await getMessages(ids);
+      if (err) {
+        const resObj = {
+          meta: {
+            code,
+            request: ids,
+            err
+          },
+          data: messages
+        };
+        return sendresponse(resObj, res);
+      }
+      const metas = [];
+      const datas = [];
+      messages.forEach(async (msg) => {
+        // check our permission
+        if (!msg || !msg.user) {
+          // not even on the list
+          console.warn('no message or user object', msg);
           const resObj={
             meta: {
               code: 500,
-              error_message: getErr
-            }
-          };
-          return sendresponse(resObj, res);
-        }
-
-        // handle already deleted messages
-        if (!message || message.is_deleted) {
-          const resObj={
-            meta: {
-              code: 410,
-            }
-          };
-          return sendresponse(resObj, res);
-        }
-
-        // if not full access
-        if (access_list !== true) {
-          // see if this message's channel is on the list
-          const allowed = access_list.indexOf(message.channel_id);
-          if (allowed === -1) {
-            // not allowed to manage this channel
-            const resObj={
-              meta: {
-                code: 403,
-                error_message: "You're not allowed to moderation this channel"
-              }
-            };
-            return sendresponse(resObj, res);
-          }
-        }
-
-        // carry out deletion
-        cache.deleteMessage(message.id, message.channel_id, (message, delErr) => {
-          // handle errors
-          if (delErr) {
-            console.error('deleteMessage err', delErr);
-            const resObj={
-              meta: {
-                code: 500,
-                error_message: delErr
-              }
-            };
-            return sendresponse(resObj, res);
-          }
-          //console.log('usertoken',  JSON.stringify(usertoken))
-          const resObj={
-            meta: {
-              code: 200,
+              error_message: "No message or user object"
             },
-            data: {
-              is_deleted: true
+          };
+          metas.push(resObj.meta);
+          datas.push(msg);
+          return;
+        }
+        if (msg.user.id !== usertoken.userid) {
+          // not even on the list
+          console.warn('user', usertoken.userid, 'tried to delete users', msg.user.id, 'message', msg.id);
+          const resObj={
+            meta: {
+              code: 403,
+              error_message: "Your token does not have permission to delete this resource"
+            },
+          };
+          metas.push(resObj.meta);
+          datas.push(msg);
+          return;
+        }
+        // we're allowed to nuke it & carry out deletion
+        const resObj = await deleteMessage(msg);
+        metas.push(resObj.meta);
+        datas.push(resObj.data);
+      });
+
+      resObj = {
+        meta: {
+          code: 200,
+          request: ids,
+          results: metas
+        },
+        data: datas
+      }
+      sendresponse(resObj, res);
+    });
+  });
+
+const modTryDeleteMessages = (ids, access_list) => {
+  return new Promise(async (resolve, rej) => {
+    const [ code, err, messages ] = await getMessages(ids);
+    const metas = [];
+    const datas = [];
+    messages.forEach(async (message) => {
+      // handle already deleted messages
+      if (!message || message.is_deleted) {
+        const resObj={
+          meta: {
+            code: 410,
+          }
+        };
+        return resolve(resObj);
+      }
+
+      // if not full access
+      if (access_list !== true) {
+        // see if this message's channel is on the list
+        const allowed = access_list.indexOf(message.channel_id);
+        if (allowed === -1) {
+          // not allowed to manage this channel
+          const resObj={
+            meta: {
+              code: 403,
+              error_message: "You're not allowed to moderation this channel"
             }
           };
-          return sendresponse(resObj, res);
-        });
-      });
-    });
+          return resolve(resObj);
+        }
+      }
+      //console.log('tryDeleteMessage message', message)
 
+      // carry out deletion
+      const resObj = await deleteMessage(message);
+      resObj.meta.id = message.id;
+      // ok how do we want to aggregate these results...
+      metas.push(resObj.meta);
+      datas.push(resObj.meta);
+    });
+    resObj = {
+      meta: {
+        code: 200,
+        request: ids,
+        results: metas
+      },
+      data: datas
+    }
+    resolve(resObj);
+  });
+}
+
+  app.delete(prefix + '/loki/v1/moderation/messages', (req, res) => {
+    if (!req.query.ids) {
+      console.warn('moderation message mass delete ids empty');
+      res.status(422).type('application/json').end(JSON.stringify({
+        error: 'ids missing',
+      }));
+      return;
+    }
+    let ids = req.query.ids;
+    if (ids && ids.match(/,/)) {
+      ids = ids.split(/,/);
+    }
+    if (typeof(ids) === 'string') {
+      ids = [ ids ];
+    }
+    if (ids.length > 200) {
+      console.warn('moderation message mass delete too many ids, 200<', ids.length);
+      res.status(422).type('application/json').end(JSON.stringify({
+        error: 'too many ids',
+      }));
+      return;
+    }
+    validGlobal(req.token, res, async (usertoken, access_list) => {
+      resObj = await modTryDeleteMessages(ids, access_list);
+      sendresponse(resObj, res);
+    });
+  });
+
+  // single mod delete, deprecated
+  app.delete(prefix + '/loki/v1/moderation/message/:id', (req, res) => {
+    validGlobal(req.token, res, async (usertoken, access_list) => {
+      const numId = parseInt(req.params.id);
+      resObj = await modTryDeleteMessages([numId], access_list);
+      sendresponse(resObj, res);
+    });
   });
 }
