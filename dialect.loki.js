@@ -675,9 +675,20 @@ const getMessages = (ids) => {
 const modTryDeleteMessages = (ids, access_list) => {
   return new Promise(async (resolve, rej) => {
     const [ code, err, messages ] = await getMessages(ids);
+    if (err) {
+      const resObj = {
+        meta: {
+          code,
+          request: ids,
+          err
+        },
+        data: messages
+      };
+      return resolve(resObj);
+    }
     const metas = [];
     const datas = [];
-    await Promise.all(messages.map(async (msg) => {
+    await Promise.all(messages.map(async (message) => {
       // handle already deleted messages
       if (!message || message.is_deleted) {
         const resObj={
