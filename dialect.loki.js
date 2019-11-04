@@ -551,6 +551,7 @@ const deleteMessage = (msg) => {
         };
         return resolve(resObj);
       }
+      // message is { data: 1 }
       const resObj={
         meta: {
           code: 200,
@@ -558,10 +559,11 @@ const deleteMessage = (msg) => {
         data: msg
       };
       resObj.data.is_deleted = true;
+      //console.log('deleteMessage resolving with', resObj);
       return resolve(resObj);
     });
   })
-}
+};
 
 const getMessages = (ids) => {
   return new Promise(function(resolve, rej) {
@@ -582,7 +584,7 @@ const getMessages = (ids) => {
       resolve([200, false, messages]);
     })
   });
-}
+};
 
   app.delete(prefix + '/loki/v1/messages', (req, res) => {
     if (!req.query.ids) {
@@ -608,6 +610,7 @@ const getMessages = (ids) => {
     }
     validUser(req.token, res, async usertoken => {
       const [ code, err, messages ] = await getMessages(ids);
+      //console.log('user multidelete getMessages result', code, err, messages.length)
       if (err) {
         const resObj = {
           meta: {
@@ -621,7 +624,7 @@ const getMessages = (ids) => {
       }
       const metas = [];
       const datas = [];
-      messages.forEach(async (msg) => {
+      await Promise.all(messages.map(async (msg) => {
         // check our permission
         if (!msg || !msg.user) {
           // not even on the list
@@ -650,14 +653,16 @@ const getMessages = (ids) => {
           return;
         }
         // we're allowed to nuke it & carry out deletion
-        const resObj = await deleteMessage(msg);
+        let resObj;
+        resObj = await deleteMessage(msg);
+        //console.log('deleteMessage resObj', resObj);
         metas.push(resObj.meta);
         datas.push(resObj.data);
-      });
+      }));
 
       resObj = {
         meta: {
-          code: 200,
+          code: code,
           request: ids,
           results: metas
         },
@@ -672,7 +677,7 @@ const modTryDeleteMessages = (ids, access_list) => {
     const [ code, err, messages ] = await getMessages(ids);
     const metas = [];
     const datas = [];
-    messages.forEach(async (message) => {
+    await Promise.all(messages.map(async (msg) => {
       // handle already deleted messages
       if (!message || message.is_deleted) {
         const resObj={
@@ -706,7 +711,7 @@ const modTryDeleteMessages = (ids, access_list) => {
       // ok how do we want to aggregate these results...
       metas.push(resObj.meta);
       datas.push(resObj.meta);
-    });
+    }));
     resObj = {
       meta: {
         code: 200,
@@ -717,7 +722,7 @@ const modTryDeleteMessages = (ids, access_list) => {
     }
     resolve(resObj);
   });
-}
+};
 
   app.delete(prefix + '/loki/v1/moderation/messages', (req, res) => {
     if (!req.query.ids) {
