@@ -573,7 +573,6 @@ const getMessages = (ids) => {
         console.error('getMessage err', getErr);
         return resolve([500, getErr, false]);
       }
-
       if (!messages || !messages.length) {
         return resolve([410, 'no messages', false]);
       }
@@ -610,7 +609,7 @@ const getMessages = (ids) => {
     }
     validUser(req.token, res, async usertoken => {
       const [ code, err, messages ] = await getMessages(ids);
-      //console.log('user multidelete getMessages result', code, err, messages.length)
+      console.log('user multidelete getMessages result', code, err, messages.length)
       if (err) {
         const resObj = {
           meta: {
@@ -721,7 +720,7 @@ const modTryDeleteMessages = (ids, access_list) => {
       resObj.meta.id = message.id;
       // ok how do we want to aggregate these results...
       metas.push(resObj.meta);
-      datas.push(resObj.meta);
+      datas.push(resObj.data);
     }));
     resObj = {
       meta: {
