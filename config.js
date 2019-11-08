@@ -23,6 +23,9 @@ const setup = (configObject) => {
   //updateUserAccess();
   // update every 15 mins
   //setInterval(updateUserAccess, 15 * 60 * 1000);
+
+  // keep disk_config fresh-ish
+  setInterval(updateFromDisk, 15 * 60 * 1000);
 }
 
 /*
