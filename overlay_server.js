@@ -3,22 +3,18 @@ const path       = require('path');
 const nconf      = require('nconf');
 const express    = require('express');
 const bodyParser = require('body-parser');
-const ini        = require('loki-launcher/ini');
+const config     = require('./config');
 
 const app = express();
 
 // Look for a config file
-const ini_bytes = fs.readFileSync('loki.ini');
-disk_config = ini.iniToJSON(ini_bytes.toString());
+const disk_config = config.getDiskConfig()
 
 //console.log('disk_config', disk_config)
 const overlay_port = parseInt(disk_config.api.port) || 8080;
 
 const config_path = path.join('./server/config.json');
 nconf.argv().env('__').file({file: config_path});
-
-// const cache = require('../sapphire-platform-server/dataaccess.caminte.js');
-// cache.start(nconf);
 
 // configure the admin interface for use
 // can be easily swapped out later
@@ -43,8 +39,7 @@ if (proxyAdmin.adminroot.replace) {
   proxyAdmin.adminroot = proxyAdmin.adminroot.replace(/\/$/, '');
 }
 
-// chose how you want to access it
-const dataAccess = 1?proxyAdmin:cache;
+const dataAccess = proxyAdmin;
 
 // need this for POST parsing
 app.use(bodyParser.json());
@@ -134,12 +129,15 @@ app.all('/*', (req, res, next) => {
 // create a fake dispatcher
 app.dispatcher={
   cache: dataAccess,
+  name: 'overlayStub',
   getUserClientByToken: function(token, cb) {
     dataAccess.getAPIUserToken(token, cb);
   }
 };
-const lokiDialectMount = require('./dialect.loki');
-lokiDialectMount(app, '');
+const lokiDialectMountToken = require('./dialects/token/dialect.loki_tokens');
+lokiDialectMountToken(app, '');
+const lokiDialectMountModeration = require('./dialects/moderation/dialect.loki_moderation');
+lokiDialectMountModeration(app, '');
 // const modDialectMount = require('./dialect.webModerator');
 // modDialectMount(app, '');
 
