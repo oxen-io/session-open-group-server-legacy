@@ -11,7 +11,6 @@ const setup = (utilties) => {
 
 const getChallengeHandler = async (req, res) => {
   const { pubKey } = req.query;
-  //console.log('dialect_tokens_handler::getChallengeHandler', pubKey)
   if (!pubKey) {
     console.log('get_challenge pubKey missing');
     res.status(422).type('application/json').end(JSON.stringify({
@@ -41,7 +40,6 @@ const getChallengeHandler = async (req, res) => {
 
 const submitChallengeHandler = async (req, res) => {
   const { pubKey, token } = req.body;
-  //console.log('dialect_tokens_handler::submitChallengeHandler', pubKey)
   if (!pubKey) {
     console.log('submit_challenge pubKey missing');
     res.status(422).type('application/json').end(JSON.stringify({
@@ -79,21 +77,13 @@ const submitChallengeHandler = async (req, res) => {
 };
 
 const getTokenInfoHandler = async (req, res) => {
-  // console.log('dialect_tokens_handler::getTokenInfoHandler')
   const usertoken = await dialect.validUser(req.token, res);
   if (usertoken === undefined) {
     // should have already been handled by dialect.validUser
     return;
   }
-  //console.log('usertoken',  JSON.stringify(usertoken))
   let resObj = {}
   try {
-    //console.log('dialect_tokens_handler::getTokenInfoHandler - getperms', usertoken.userid)
-    // do we want server permissions?
-    // or do we want a list of channel permissions?
-    //const [err, perms] = await logic.getAllPermissionsByUserId(usertoken.userid);
-    //console.log('dialect_tokens_handler::getTokenInfoHandler - got perms')
-    //console.log('perms', perms)
     const modStatus = await config.getUserAccess(usertoken.userid);
     resObj={
       meta: {

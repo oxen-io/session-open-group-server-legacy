@@ -9,8 +9,8 @@ const logic   = require('./logic');
 const dialect = require('./lib.dialect');
 
 // Look for a config file
-const disk_config = config.getDiskConfig()
-storage.start(disk_config)
+const disk_config = config.getDiskConfig();
+storage.start(disk_config);
 
 const setup = (cache, dispatcher) => {
   config.setup({ cache, storage });
@@ -21,4 +21,4 @@ const setup = (cache, dispatcher) => {
 
 module.exports = {
   setup
-}
+};

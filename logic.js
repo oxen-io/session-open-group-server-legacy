@@ -1,22 +1,22 @@
-const funcs = []
-funcs.push(require('./logic/permissions.js'))
+const funcs = [];
+funcs.push(require('./logic/permissions.js'));
 
-let storage
-let cache
+let storage;
+let cache;
 
 function setup(configObject) {
-  ({ storage, cache, config } = configObject)
+  ({ storage, cache, config } = configObject);
 
   funcs.forEach((func) => {
-    func.start(configObject)
+    func.start(configObject);
   });
 }
 
-let functions = {}
+let functions = {};
 funcs.forEach((func) => {
-  functions = Object.assign(functions, func)
+  functions = Object.assign(functions, func);
 });
 
-module.exports = functions
+module.exports = functions;
 // override all those starts
-module.exports.setup = setup
+module.exports.setup = setup;

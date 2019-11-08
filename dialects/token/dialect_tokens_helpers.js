@@ -61,15 +61,12 @@ const deleteTempStorageForToken = (pubKey, token) => {
 }
 
 const checkTempStorageForToken = (token) => {
-  //console.log('searching for', token)
   // check temp storage
   for(var pubKey in tempDB) {
     const found = tempDB[pubKey].find(tempObjs => {
       const tempToken = tempObjs.token;
-      //console.log('pubKey', pubKey, 'token', tempToken);
       if (tempToken === token) return true;
     })
-    //console.log('pubKey', pubKey, 'found', found);
     if (found) {
       return true;
     }
@@ -107,7 +104,6 @@ const findToken = (token) => {
         return rej(err);
       }
       // report back existence
-      //console.log('backend has token', usertoken?true:false, token);
       res(usertoken?true:false);
     });
   });
@@ -126,11 +122,9 @@ const generateString = () => {
 }
 
 const createToken = (pubKey) => {
-  //console.log('dialect_tokens_helpers::createToken', pubKey)
   return new Promise((res, rej) => {
     findOrCreateUser(pubKey)
       .then(async user => {
-        //console.log('Creating token for', user.id)
         // generate new random token and make sure it's not in use
         let inUse = true;
         while(inUse) {
@@ -146,30 +140,25 @@ const createToken = (pubKey) => {
 }
 
 const findOrCreateUser = (pubKey) => {
-  //console.log('dialect_tokens_helpers::findOrCreateUser', pubKey)
   return new Promise((res, rej) => {
     cache.getUserID(pubKey, (user, err) => {
       if (err) {
         rej(err);
         return;
       }
-      //console.log('findOrCreateUser', pubKey, 'new', user === null);
       if (user === null) {
         // create user
         // "password" (2nd) parameter is not saved/used
-        //console.log('calling addUser')
         cache.addUser(pubKey, '', (newUser, err2) => {
           if (err2) {
             console.error('addUser err', err2);
             rej(err2);
           } else {
-            //console.log('passing back newly created', newUser)
             res(newUser);
           }
         })
       } else {
         // we have this user
-        //console.log('findOrCreateUser', user)
         res(user);
       }
     });
@@ -242,7 +231,6 @@ const confirmToken = (pubKey, token) => {
     if (!userObj) {
       return rej('user');
     }
-    console.log('confirming token for user', userObj.id, 'for', pubKey);
     // promote token to usable for user
     cache.addUnconstrainedAPIUserToken(userObj.id, 'messenger', ADN_SCOPES, token, TOKEN_TTL_MINS, (tokenObj, err) => {
       if (err) {
@@ -250,7 +238,6 @@ const confirmToken = (pubKey, token) => {
         return rej('tokenCreation');
       }
       // if no, err we assume everything is fine...
-      //console.log('addUnconstrainedAPIUserToken result', tokenObj)
       // ok token is now registered
       // remove from temp storage
       deleteTempStorageForToken(pubKey, token);

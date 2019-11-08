@@ -1,11 +1,11 @@
 // have to generalize these since almost every system needs to check permissions
 
-let storage
-let cache
+let storage;
+let cache;
 
 module.exports = {
   start: (configObject) => {
-    ({ storage, cache } = configObject)
+    ({ storage, cache } = configObject);
   },
   // maybe only needed in dialog_token
   passesWhitelist: async (pubKey) => {
@@ -36,6 +36,7 @@ module.exports = {
     // by default everyone is allowed
     return true;
   },
+  // FIXME: should return a promise
   getPermissionsByUser: (pubKey, entity, entityId) => {
     // get userID
     const ref = this;
@@ -44,7 +45,6 @@ module.exports = {
     })
   },
   getEntityPermissionsByUserId: async (userid, entity, entityId) => {
-    //console.log('logic:::permissions::getPermissionsByUserId(', userid, entity, entityId, ')');
     if (userid === undefined) {
       console.warn('logic:::permissions::getPermissionsByUserId - no userid');
       return [ 'no userid' ];
@@ -60,9 +60,9 @@ module.exports = {
     // get user roles
     let roles
     try {
-      console.log('logic:::permissions::getPermissionsByUserId - ', userid)
+      console.log('logic:::permissions::getPermissionsByUserId - ', userid);
       roles = await storage.getRolesByUserId(userid, (err, roles) => {
-        console.log('roles', roles)
+        console.log('roles', roles);
         // get roles permissions by entity
         // get user permissions by entity
         // collapse it down...
@@ -97,7 +97,7 @@ module.exports = {
     // get channel roles
     try {
       const roles = await storage.getRolesByChannelId(channelid, (err, roles) => {
-        console.log('channel roles', roles)
+        console.log('channel roles', roles);
         // get roles permissions by entity
         // get user permissions by entity
         // collapse it down...
@@ -105,7 +105,7 @@ module.exports = {
     } catch(e) {
       console.error('getPermissionsByChannelId failure', e);
     }
-    console.log('roles return', roles)
+    console.log('roles return', roles);
     // we need to return a list of users that fit these permissions?
   },
   whoHasThisPerm: (entity, entityId, permission) => {
@@ -113,7 +113,6 @@ module.exports = {
   },
   getModeratorsByChannelId: async (channelId, cb) => {
     const mods = await storage.getModeratorsByChannelId(channelId);
-    console.log('logic:::permissions::getModeratorsByChannelId - mods', mods);
     return mods;
   },
   addGlobalModerator: async userid => {
@@ -136,7 +135,6 @@ module.exports = {
     function removeAllTokens(username) {
       return new Promise( async (resolve, rej) => {
         cache.getAPITokenByUsername(username, (usertoken, err, meta) => {
-          //console.log('getAPITokenByUsername');
           if (err) console.error('logic:::permissions::blacklistUserFromServer - getAPITokenByUsername err', err);
           if (usertoken) {
             cache.delAPIUserToken(usertoken.token, async (delToken, err) => {
@@ -162,26 +160,20 @@ module.exports = {
     }
     // mark the database as such, so they can't get any new tokens
     const result = await storage.blacklistUserFromServer(userid);
-    //console.log('logic::permission:blacklistUserFromServer - result', result)
     if (!result) {
       console.warn('logic:::permissions::blacklistUserFromServer - failed to blacklist');
       return false;
     }
     // get username, so we can query token by username
-    //console.log('logic::permission:blacklistUserFromServer - lookup', userid)
     const user = await getUserPromise(userid);
     const username = user.username;
-    //console.log('logic:::permissions::blacklistUserFromServer -', userid, 'is', username)
 
     if (username !== null ) {
-      //console.log('checkForToken')
       // expire all their tokens they have
       await removeAllTokens(username)
-      //console.log('all tokens removed for', username);
     } else {
       console.error('logic:::permissions::blacklistUserFromServer - null username for', userid)
     }
     return true;
-    //console.log('logic::permission:blacklistUserFromServer - wait')
   },
 }

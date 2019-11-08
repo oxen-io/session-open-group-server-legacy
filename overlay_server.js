@@ -8,9 +8,8 @@ const config     = require('./config');
 const app = express();
 
 // Look for a config file
-const disk_config = config.getDiskConfig()
+const disk_config = config.getDiskConfig();
 
-//console.log('disk_config', disk_config)
 const overlay_port = parseInt(disk_config.api.port) || 8080;
 
 const config_path = path.join('./server/config.json');
@@ -91,17 +90,14 @@ app.all('/*', (req, res, next) => {
   const pageParams = {};
   pageParams.since_id = false;
   if (req.query.since_id) {
-    //console.log("Overriding since_id to "+req.query.since_id);
     pageParams.since_id = parseInt(req.query.since_id);
   }
   pageParams.before_id=false;
   if (req.query.before_id) {
-    //console.log("Overriding before_id to "+req.query.before_id);
     pageParams.before_id = parseInt(req.query.before_id);
   }
   pageParams.count=20;
   if (req.query.count) {
-    //console.log("Overriding count to "+req.query.count);
     pageParams.count = Math.min(Math.max(req.query.count, -200), 200);
   }
   // stream marker supported endpoints only

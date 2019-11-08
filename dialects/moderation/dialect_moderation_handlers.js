@@ -36,7 +36,6 @@ const getChannelModeratorsHandler = async (req, res) => {
 
 const getDeletesHandler = (req, res) => {
   const numId = parseInt(req.params.id);
-  //console.log('numId', numId)
   cache.getChannelDeletions(numId, req.apiParams, (interactions, err, meta) => {
     const items = interactions.map(interaction => ({
       delete_at: interaction.datetime,
@@ -52,9 +51,8 @@ const getDeletesHandler = (req, res) => {
 };
 
 const deleteMultipleHandler = (req, res) => {
-  //console.log('dialect_moderation_handler::deleteMultipleHandler - ids', req.query.ids);
   if (!req.query.ids) {
-    console.log('moderation message mass delete ids empty');
+    console.warn('user message mass delete ids empty');
     res.status(422).type('application/json').end(JSON.stringify({
       error: 'ids missing',
     }));
@@ -68,16 +66,14 @@ const deleteMultipleHandler = (req, res) => {
     ids = [ ids ];
   }
   if (ids.length > 200) {
-    console.log('moderation message mass delete too many ids, 200<', ids.length);
+    console.warn('user message mass delete too many ids, 200<', ids.length);
     res.status(422).type('application/json').end(JSON.stringify({
       error: 'too many ids',
     }));
     return;
   }
   dialect.validUser(req.token, res, async usertoken => {
-    //console.log('dialect_moderation_handler::deleteMultipleHandler - validUser');
     const [ code, err, messages ] = await helpers.getMessages(ids);
-    //console.log('dialect_moderation_handler::deleteMultipleHandler - getMessages', code);
     if (err) {
       console.error('dialect_moderation_handler::deleteMultipleHandler - getMessages err', err)
       const resObj = {
@@ -120,13 +116,12 @@ const deleteMultipleHandler = (req, res) => {
         datas.push(msg);
         return;
       }
-      //console.log('dialect_moderation_handler::deleteMultipleHandler - nuking', msg.id);
+
       // we're allowed to nuke it & carry out deletion
       const resObj = await helpers.deleteMessage(msg);
       metas.push(resObj.meta);
       datas.push(resObj.data);
     }));
-    //console.log('dialect_moderation_handler::deleteMultipleHandler - calling back');
     resObj = {
       meta: {
         code: code,
@@ -142,9 +137,7 @@ const deleteMultipleHandler = (req, res) => {
 const modDeleteSingleHandler = (req, res) => {
   helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
     const numId = parseInt(req.params.id);
-    //console.log('dialect_moderation_handlers::modDeleteSingleHandler - modTryDeleteMessages');
     resObj = await helpers.modTryDeleteMessages([numId], access_list);
-    //console.log('dialect_moderation_handlers::modDeleteSingleHandler - Sending response');
     dialect.sendResponse(resObj, res);
   });
 };
@@ -217,7 +210,7 @@ const removeGlobalModerator = (req, res) => {
     data: []
   }
   helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
-    //
+    res.data = await storage.removeServerModerator(usertoken.userid);
     dialect.sendResponse(resObj, res);
   });
 };
@@ -236,9 +229,7 @@ const blacklistUserFromServerHandler = (req, res) => {
     data: []
   }
   helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
-    //console.log('blacklistUserFromServerHandler validGlobal')
     const result = await logic.blacklistUserFromServer(req.params.id);
-    //console.log('blacklistUserFromServerHandler result', result)
     dialect.sendResponse(resObj, res);
   });
 }

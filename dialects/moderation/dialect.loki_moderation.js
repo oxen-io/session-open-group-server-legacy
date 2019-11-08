@@ -2,10 +2,6 @@
 const overlay  = require('../../lib.overlay');
 const handlers = require('./dialect_moderation_handlers');
 
-//
-// helpers
-//
-
 module.exports = (app, prefix) => {
   // set cache based on dispatcher object
   cache = app.dispatcher.cache;
@@ -31,9 +27,12 @@ module.exports = (app, prefix) => {
   // single mod delete, deprecated
   app.delete(prefix + '/loki/v1/moderation/messages', handlers.modDeleteMultipleHandler);
 
+  // create moderator
   app.post(prefix + '/loki/v1/moderators/:id', handlers.addGlobalModerator);
+  // remove moderator
   app.delete(prefix + '/loki/v1/moderators/:id', handlers.removeGlobalModerator);
 
+  // blacklist userid
   app.post(prefix + '/loki/v1/moderation/blacklist/:id', handlers.blacklistUserFromServerHandler);
 
 }

@@ -6,10 +6,10 @@ const setup = (utilties) => {
   ({ config, cache, dispatcher, dialect } = utilties);
 };
 
+// not currently used
 const getUser = (userid) => {
   return new Promise((res, rej) => {
     cache.getUser(userid, (user, err) => {
-      //console.log('getUser', user)
       if (user) {
         res(user);
       } else {
@@ -27,16 +27,15 @@ const getUsers = (userids) => {
     let next200 = userids.splice(0, 200);
     while(next200.length) {
       requests++;
+
       // allow them to overlap
       cache.getUsers(next200, {}, (users, err) => {
         if (err) {
           return rej(err);
         }
-        // console.log('getUsers', users)
         results = results.concat(users);
         responses++;
         if (requests === responses) {
-          // console.log('results', results);
           return res(results);
         }
       });
@@ -46,15 +45,12 @@ const getUsers = (userids) => {
 };
 
 const validGlobal = (token, res, cb) => {
-  //console.log('dialect_moderation_helpers::validGlobal', token)
   dialect.validUser(token, res, async (usertoken) => {
     if (usertoken === undefined) {
       // should have already been handled by dialect.validUser
       return;
     }
-    //console.log('usertoken', usertoken);
     const list = await config.getUserAccess(usertoken.userid);
-    //console.log('list', list);
     if (!list) {
       // not even on the list
       const resObj={
@@ -101,9 +97,7 @@ const deleteMessage = (msg) => {
 
 const getMessages = (ids) => {
   return new Promise(function(resolve, rej) {
-    //console.log('dialect_moderation_helpers::getMessage starting', ids)
     cache.getMessage(ids, (messages, getErr) => {
-      //console.log('dialect_moderation_helpers::getMessage returned')
       // handle errors
       if (getErr) {
         console.error('getMessage err', getErr);
@@ -163,7 +157,6 @@ const modTryDeleteMessages = async (ids, access_list) => {
         return resObj;
       }
     }
-    //console.log('tryDeleteMessage message', message)
 
     // carry out deletion
     const resObj = await deleteMessage(message);

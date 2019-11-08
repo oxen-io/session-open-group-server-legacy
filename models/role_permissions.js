@@ -74,9 +74,10 @@ const getRolesByUserId = (user_id, cb) => {
 
 module.exports = {
   start: start,
-  addRolePermissions: (role) => {
+  // is this even needed?
+  addRolePermissions: async (role) => {
     const perm = new permissionModel(role);
-    perm.save();
+    await perm.save();
   },
   getRolesByChannelId: (channel_id, cb) => {
     return permissionModel.find({
@@ -85,8 +86,8 @@ module.exports = {
   },
   getRolesByUserId,
   getUsers,
-  getRoles: async (cb) => {
-    return await permissionModel.find({
+  getRoles: (cb) => {
+    return permissionModel.find({
       where: { entity_type: 'role' }
     }, cb);
   },
@@ -112,12 +113,38 @@ module.exports = {
         permission.object = 'server';
         permission.object_id = 0;
         permission.moderator = 1;
-        permission.moderator.ord = 0;
-        //console.log('starting mod save');
+        permission.ord = 0;
         await permission.save();
-        //console.log('starting mod saved');
         return;
       }
+    });
+  },
+  removeServerModerator: async user_id => {
+    if (user_id === undefined) {
+      console.error('role_permissions:removeServerModerator given a user_id that is undefined');
+      return;
+    }
+    const criteria = {
+      entity_type: 'user', entityid: user_id,
+      object: 'server', object_id,
+      moderator: 1
+    };
+    permissionModel.find({ where: criteria }, async (err, permissions) => {
+      if (err) {
+        console.error('role_permissions:removeServerModerator err', err);
+        return;
+      }
+      if (!permissions || !permissions.length) {
+        console.warn('role_permissions:removeServerModerator no roles that match', criteria);
+        return;
+      }
+      await Promise.all(permissions.map(perm => {
+        return new Promise((resolve, rej) => {
+          perm.destroy(function() {
+            resolve();
+          });
+        });
+      }));
     });
   },
   isGlobalModerator: async user_id => {
@@ -126,7 +153,6 @@ module.exports = {
       return;
     }
     const userPerms = await getRolesByUserId(user_id);
-    //console.log('isBlacklisted userPerms', userPerms);
     if (!userPerms || !userPerms.length) {
       // no entries at all
       // FIXME: look up server default
@@ -175,7 +201,6 @@ module.exports = {
       console.error('role_permissions:blacklistUserFromServer given a user_id that is undefined');
       return;
     }
-    console.log('blacklistUserFromServer user_id', user_id)
     const permission = new permissionModel;
     permission.entity_type = 'user';
     permission.entity_id = user_id;
@@ -193,7 +218,6 @@ module.exports = {
       return;
     }
     const userPerms = await getRolesByUserId(user_id);
-    //console.log('isBlacklisted userPerms', userPerms);
     if (!userPerms || !userPerms.length) {
       // no entries at all
       // FIXME: look up server default
