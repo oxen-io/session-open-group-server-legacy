@@ -66,7 +66,10 @@ const getUsers = (cb) => {
 };
 
 const getRolesByUserId = (user_id, cb) => {
-  console.log('storage::getRolesByUserId - user_id', user_id)
+  if (user_id === undefined) {
+    console.error('storage::role_permissions:getRolesByUserId - given a user_id that is undefined');
+    return;
+  }
   return permissionModel.find({
     where: { entity_type: 'user', entity_id: user_id }, order: 'ord'
   }, cb);
@@ -103,7 +106,7 @@ module.exports = {
     return []; // no moderators
   },
   addServerModerator: (user_id) => {
-    permissionModel.find({ where: { entity_type: 'user', entityid: user_id }, order: 'ord'}, async (err, permissions) => {
+    permissionModel.find({ where: { entity_type: 'user', entity_id: user_id }, order: 'ord'}, async (err, permissions) => {
       if (err) console.error('storage:::role_permissions::addServerModerator err', err);
       if (!permissions.length) {
         // creating record
@@ -125,8 +128,8 @@ module.exports = {
       return;
     }
     const criteria = {
-      entity_type: 'user', entityid: user_id,
-      object: 'server', object_id,
+      entity_type: 'user', entity_id: user_id,
+      object: 'server', object_id: 0,
       moderator: 1
     };
     permissionModel.find({ where: criteria }, async (err, permissions) => {
