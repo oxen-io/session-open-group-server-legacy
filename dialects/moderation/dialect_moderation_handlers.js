@@ -203,14 +203,14 @@ const removeGlobalModerator = (req, res) => {
     }));
     return;
   }
-  const resObj = {
-    meta: {
-      code: 200
-    },
-    data: []
-  }
   helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
     res.data = await storage.removeServerModerator(usertoken.userid);
+    const resObj = {
+      meta: {
+        code: 200
+      },
+      data: []
+    }
     dialect.sendResponse(resObj, res);
   });
 };
@@ -222,14 +222,14 @@ const blacklistUserFromServerHandler = (req, res) => {
     }));
     return;
   }
-  const resObj = {
-    meta: {
-      code: 200
-    },
-    data: []
-  }
   helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
     const result = await logic.blacklistUserFromServer(req.params.id);
+    const resObj = {
+      meta: {
+        code: 200
+      },
+      data: []
+    }
     dialect.sendResponse(resObj, res);
   });
 }
