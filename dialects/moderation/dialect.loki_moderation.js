@@ -10,11 +10,13 @@ module.exports = (app, prefix) => {
   utilities.dispatcher = app.dispatcher;
   handlers.setup(utilities);
 
+  // get list of moderators per channel
   // legacy
   app.get(prefix + '/loki/v1/channel/:id/get_moderators', handlers.getChannelModeratorsHandler);
   // new official
   app.get(prefix + '/loki/v1/channels/:id/moderators', handlers.getChannelModeratorsHandler);
 
+  // get a list of deletes in a channel
   // backwards compatibility
   app.get(prefix + '/loki/v1/channel/:id/deletes', handlers.getDeletesHandler);
   // new official URL to keep it consistent
@@ -23,8 +25,9 @@ module.exports = (app, prefix) => {
   // user multi delete
   app.delete(prefix + '/loki/v1/messages', handlers.deleteMultipleHandler);
 
+  // mod single delete - deprecated
   app.delete(prefix + '/loki/v1/moderation/message/:id', handlers.modDeleteSingleHandler);
-  // single mod delete, deprecated
+  // mod multi delete
   app.delete(prefix + '/loki/v1/moderation/messages', handlers.modDeleteMultipleHandler);
 
   // create moderator
