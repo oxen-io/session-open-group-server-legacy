@@ -2,7 +2,6 @@ const fs           = require('fs');
 const path         = require('path');
 const nconf        = require('nconf');
 const assert       = require('assert');
-const ini          = require('loki-launcher/ini');
 const lokinet      = require('loki-launcher/lokinet');
 const crypto       = require('crypto');
 const bb           = require('bytebuffer');
@@ -13,8 +12,6 @@ const config       = require('../config');
 const ADN_SCOPES = 'basic stream write_post follow messages update_profile files export';
 
 // Look for a config file
-//const ini_bytes = fs.readFileSync('loki.ini');
-//disk_config = ini.iniToJSON(ini_bytes.toString());
 const disk_config = config.getDiskConfig();
 
 //console.log('disk_config', disk_config)
@@ -105,20 +102,6 @@ const ensureOverlayServer = () => {
   });
 };
 
-const IV_LENGTH = 16;
-
-/*
-const config_path = path.join(__dirname, '/../server/config.json');
-console.log('config_path', config_path);
-// and a model file
-const config_model_path = path.join(__dirname, '/config.models.json');
-nconf.argv().env('__').file({file: config_path}).file('model', {file: config_model_path});
-
-let webport = nconf.get('web:port') || 7070;
-const base_url = 'http://localhost:' + webport + '/'
-console.log('read', base_url)
-*/
-
 const overlayApi  = new adnServerAPI(overlay_url);
 const platformApi = new adnServerAPI(platform_api_url);
 const adminApi    = new adnServerAPI(platform_admin_url, disk_config.api.modKey);
@@ -135,11 +118,9 @@ const selectModToken = async () => {
   if (disk_config.globals) {
     modKeys = Object.keys(disk_config.globals);
   }
-  //console.log('modKeys', modKeys.length);
   let modToken = '';
   if (!modKeys.length) {
     // we started platform?
-    //console.log('weStartedOverlayServer', weStartedOverlayServer);
     if (weStartedOverlayServer) {
       console.warn('test.js - no moderators configured and we control overlayServer, creating temporary moderator');
       const ourModKey = libsignal.curve.generateKeyPair();
@@ -163,7 +144,6 @@ const selectModToken = async () => {
     }
   }
   const selectedMod = Math.floor(Math.random() * modKeys.length);
-  //console.log('selectedMod', selectedMod);
   modPubKey = modKeys[selectedMod];
   if (!modPubKey) {
     console.warn('selectedMod', selectedMod, 'not in', modKeys.length);
@@ -202,6 +182,7 @@ const ourPubKey64 = bb.wrap(ourKey.pubKey).toString('base64');
 const ourPubKeyHex = bb.wrap(ourKey.pubKey).toString('hex');
 console.log('running as', ourPubKeyHex);
 
+const IV_LENGTH = 16;
 const DHDecrypt = async (symmetricKey, ivAndCiphertext) => {
   const iv = ivAndCiphertext.slice(0, IV_LENGTH);
   const ciphertext = ivAndCiphertext.slice(IV_LENGTH);
@@ -361,7 +342,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
   let channelId = 3; // default channel to try to test first
 
   // get our token
-  let tokenString
+  let tokenString, userid, mod_userid;
   describe('get our token', function() {
     it('get token', async function() {
       tokenString = await get_challenge(ourKey, ourPubKeyHex);
@@ -374,6 +355,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       // set token
       overlayApi.token = tokenString;
       platformApi.token = tokenString;
+      //userid = await getUserID(ourPubKeyHex);
     });
 
     it('user info (non-mod)', async function() {
@@ -385,19 +367,22 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       assert.ok(result.response.data);
       // we're a freshly created user (hopefully)
       assert.ok(!result.response.data.moderator_status);
+      assert.ok(result.response.data.user_id);
+      userid = result.response.data.user_id;
     });
 
     // test moderator security...
     describe('moderator security tests', function() {
+      it('cant promote to moderator', async function() {
+        const result = await overlayApi.serverRequest(`loki/v1/moderators/${userid}`, {
+          method: 'POST',
+        });
+        assert.equal(401, result.statusCode);
+      });
       it('cant blacklist', async function() {
-        //console.log('key', ourPubKeyHex);
-        const userid = await getUserID(ourPubKeyHex);
-        assert.ok(userid);
-        //console.log('userid', userid);
         const result = await overlayApi.serverRequest(`loki/v1/moderation/blacklist/${userid}`, {
           method: 'POST',
         });
-        //console.log('after blacklist attempt', result);
 /*
 {
   err: 'statusCode',
@@ -440,23 +425,12 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       it('create message to test with', async function() {
         // well we need to create a new message for moderation test
         messageId = await create_message(channelId);
-        //let message = await get_message(messageId);
-        //console.log('message1', message);
         messageId1 = await create_message(channelId);
-        //message = await get_message(messageId1);
-        //console.log('message2', message);
         messageId2 = await create_message(channelId);
-        //message = await get_message(messageId2);
-        //console.log('message3', message);
         messageId3 = await create_message(channelId);
-        //message = await get_message(messageId3);
-        //console.log('message4', message);
         messageId4 = await create_message(channelId);
-        //message = await get_message(messageId4);
-        //console.log('message5', message);
-        //console.log('messageId', messageId);
       });
-      it('user cant mod delete', async function() {
+      it('user cant mod delete message', async function() {
         const result = await overlayApi.serverRequest(`loki/v1/moderation/message/${messageId}`, {
           method: 'DELETE',
         });
@@ -464,7 +438,6 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       });
       it('user multi delete test', async function () {
         //let message = await get_message(messageId);
-        //console.log('message before', message);
         if (messageId3 && messageId4) {
           const result = await overlayApi.serverRequest('loki/v1/messages', {
             method: 'DELETE',
@@ -485,8 +458,8 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
         get_moderators(channelId);
       });
       // Moderator only functions
+      let modToken
       describe('channel moderator testing', function() {
-        let modToken
         it('we have moderator to test with', async function() {
           // now do moderation tests
           modToken = await selectModToken();
@@ -510,8 +483,18 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           // || result.response.moderator_status.match(',')
           // I think we only should be global here for now...
           assert.equal(true, result.response.data.moderator_status === true);
+          assert.ok(result.response.data.user_id);
+          mod_userid=result.response.data.user_id;
+        });
+        it('user cant demote moderators', async function() {
+          overlayApi.token = tokenString; // switch to user
+          const result = await overlayApi.serverRequest(`loki/v1/moderators/${mod_userid}`, {
+            method: 'DELETE',
+          });
+          assert.equal(401, result.statusCode);
         });
         it('mod delete test', async function() {
+          overlayApi.token = modToken; // switch back to mod
           if (modToken && messageId) {
             //let message = await get_message(messageId);
             //console.log('message1', message);
