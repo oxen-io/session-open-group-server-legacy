@@ -2,7 +2,7 @@ const userRole = require('./user_roles');
 
 var permissionModel;
 
-function start(options) {
+const start = options => {
   const { schema } = options
   /** role_permission storage model */
   permissionModel = schema.define('role_permissions', {
@@ -43,6 +43,8 @@ function start(options) {
   })
 }
 
+// this is wrong, this only works PER USER
+// you can collapse user permissions for all users for a channel/server...
 const compileByObject = async (object, object_id) => {
   const objectPerms = await permissionModel.find({ where: { object, object_id }, order: 'ord' })
   const perms = objectPerms.pop()
@@ -97,13 +99,30 @@ module.exports = {
   // server or channel
   compileByObject,
   getModeratorsByChannelId: async (channel_id, cb) => {
+    if (channel_id === undefined) {
+      console.error('role_permissions:getModeratorsByChannelId given an undefined channel_id');
+      return;
+    }
+    let moderators = [];
+
+    // just get a list of all server mods
+    const userperms = await permissionModel.find({
+      where: { object: 'server', object_id: 0, entity_type: 'user', moderator: 1 }, order: 'ord'
+    });
+    moderators = userperms.map(perm => perm.entity_id);
+
+    // do it correctly later
+    /*
     const servPerms = await compileByObject('server', 0);
     const chnlPerms = await compileByObject('channel', channel_id);
     const userPerms = await getUsers();
     const allUsersPerms = await userRole.getAllUsers();
-    console.log('storage::role_permissions - userPerms', userPerms);
-    console.log('storage::role_permissions - allUsersPerms', allUsersPerms);
-    return []; // no moderators
+    //console.log('storage::role_permissions - userPerms', userPerms);
+    console.log('storage::role_permissions - servPerms', servPerms);
+    //console.log('storage::role_permissions - chnlPerms', channel_id, chnlPerms);
+    //console.log('storage::role_permissions - allUsersPerms', allUsersPerms);
+    */
+    return moderators;
   },
   addServerModerator: (user_id) => {
     permissionModel.find({ where: { entity_type: 'user', entity_id: user_id }, order: 'ord'}, async (err, permissions) => {
@@ -143,7 +162,7 @@ module.exports = {
       }
       await Promise.all(permissions.map(perm => {
         return new Promise((resolve, rej) => {
-          perm.destroy(function() {
+          perm.destroy(() => {
             resolve();
           });
         });
@@ -176,8 +195,10 @@ module.exports = {
       // FIXME: look up server default
       // write back to perms['allowed']
     }
-    return perms['moderator'] == 1 ? true : false;
+    return perms['moderator'] === 1;
   },
+  // get a list of channels this user can moderator...
+  // called by config
   getChannelModerator: async user_id => {
     if (user_id === undefined) {
       console.error('role_permissions:getChannelModerator given a user_id that is undefined');
@@ -240,6 +261,6 @@ module.exports = {
       // FIXME: look up server default
       // write back to perms['allowed']
     }
-    return perms['allowed'] == -1 ? true : false;
+    return perms['allowed'] === -1;
   },
 }
