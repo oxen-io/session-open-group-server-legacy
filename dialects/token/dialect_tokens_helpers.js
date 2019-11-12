@@ -62,7 +62,7 @@ const deleteTempStorageForToken = (pubKey, token) => {
 
 const checkTempStorageForToken = (token) => {
   // check temp storage
-  for(var pubKey in tempDB) {
+  for(const pubKey in tempDB) {
     const found = tempDB[pubKey].find(tempObjs => {
       const tempToken = tempObjs.token;
       if (tempToken === token) return true;
