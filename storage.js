@@ -7,7 +7,7 @@ funcs.push(require('./models/role_permissions.js'));
 
 const Schema = require('caminte').Schema
 
-memoryUpdate = function (model, filter, data, callback) {
+const memoryUpdate = (model, filter, data, callback) => {
   'use strict';
   if ('function' === typeof filter) {
     return filter(new Error('Get parametrs undefined'), null);
