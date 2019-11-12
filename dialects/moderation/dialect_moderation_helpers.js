@@ -69,7 +69,7 @@ const validGlobal = (token, res, cb) => {
 };
 
 const deleteMessage = (msg) => {
-  return new Promise(function(resolve, rej) {
+  return new Promise((resolve, rej) => {
     // carry out deletion
     cache.deleteMessage(msg.id, msg.channel_id, (message, delErr) => {
       // handle errors
@@ -96,7 +96,7 @@ const deleteMessage = (msg) => {
 };
 
 const getMessages = (ids) => {
-  return new Promise(function(resolve, rej) {
+  return new Promise((resolve, rej) => {
     cache.getMessage(ids, (messages, getErr) => {
       // handle errors
       if (getErr) {
@@ -134,12 +134,9 @@ const modTryDeleteMessages = async (ids, access_list) => {
   await Promise.all(messages.map(async (message) => {
     // handle already deleted messages
     if (!message || message.is_deleted) {
-      const resObj={
-        meta: {
-          code: 410,
-        }
-      };
-      return resObj;
+      metas.push({ code: 410 });
+      datas.push(false);
+      return;
     }
 
     // if not full access
@@ -154,7 +151,9 @@ const modTryDeleteMessages = async (ids, access_list) => {
             error_message: "You're not allowed to moderation this channel"
           }
         };
-        return resObj;
+        metas.push(resObj.meta);
+        datas.push(false);
+        return;
       }
     }
 
@@ -163,7 +162,7 @@ const modTryDeleteMessages = async (ids, access_list) => {
     resObj.meta.id = message.id;
     // ok how do we want to aggregate these results...
     metas.push(resObj.meta);
-    datas.push(resObj.meta);
+    datas.push(resObj.data);
   }));
   resObj = {
     meta: {
@@ -179,6 +178,7 @@ const modTryDeleteMessages = async (ids, access_list) => {
 module.exports = {
   setup,
   validGlobal,
+  getUsers,
   getMessages,
   modTryDeleteMessages,
   deleteMessage
