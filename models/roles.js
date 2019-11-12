@@ -1,6 +1,6 @@
 var roleModel
 
-function start(options) {
+const start = options => {
   const { schema } = options
   /** role storage model */
   roleModel = schema.define('roles', {
@@ -12,12 +12,12 @@ module.exports = {
   start: start,
   getRoleIdByName: (name) => {
     return new Promise((resolve, rej) => {
-      roleModel.find({ where: { name } }, function(err, roles) {
+      roleModel.find({ where: { name } }, (err, roles) => {
         if (err) {
           console.error(err)
           return rej(err)
         }
-        if (roles.length != 1) {
+        if (roles.length !== 1) {
           return cb('length ' + roles.length, false)
         }
         //cb(err, roles[0].id)
