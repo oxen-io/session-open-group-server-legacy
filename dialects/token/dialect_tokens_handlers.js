@@ -99,7 +99,8 @@ const getTokenInfoHandler = async (req, res) => {
       }
     };
   } catch (e) {
-    console.error('e', e);
+    console.error('dialect_tokens_handlers::getTokenInfoHandler e', e);
+    resObj.meta.error_message = e;
   }
   return dialect.sendResponse(resObj, res);
 };
