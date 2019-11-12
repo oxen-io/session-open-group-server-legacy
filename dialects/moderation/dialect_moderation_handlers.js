@@ -2,7 +2,7 @@ const helpers = require('./dialect_moderation_helpers');
 
 // all input / output filtering should happen here
 
-let cache, dialect
+let cache, dialect, logic, storage
 const setup = (utilties) => {
   // config are also available here
   ({ cache, dialect, logic, storage } = utilties);
@@ -11,25 +11,34 @@ const setup = (utilties) => {
 
 const getChannelModeratorsHandler = async (req, res) => {
   const channelId = parseInt(req.params.id);
+  if (isNaN(channelId)) {
+    console.warn('id is not a number');
+    res.status(400).type('application/json').end(JSON.stringify({
+      error: 'id not a valid number',
+    }));
+  }
   const roles = {
     moderators: [],
   };
 
-  const perms = await logic.getModeratorsByChannelId(channelId);
-  console.log('dialect_moderation_handlers::getChannelModeratorsHandler - get channel mods', perms);
+  let userids;
+  try {
+    userids = await logic.getModeratorsByChannelId(channelId);
+  } catch(e) {
+    console.error(`Error getModeratorsByChannelId ${e}`);
+    return res.status(500).type('application/json').end(JSON.stringify(roles));
+  }
 
-  const userids = perms;
   if (userids.length) {
-    let userAdnObjects = [];
     try {
-      userAdnObjects = await helpers.getUsers(userids);
+      const userAdnObjects = await helpers.getUsers(userids);
+      roles.moderators = userAdnObjects.map(obj => {
+        return obj.username;
+      });
     } catch(e) {
-      console.error(`Error getting users ${userids}`);
+      console.error(`Error getting users ${userids} ${e}`);
       return res.status(500).type('application/json').end(JSON.stringify(roles));
     }
-    roles.moderators = userAdnObjects.map(obj => {
-      return obj.username;
-    });
   }
   res.status(200).type('application/json').end(JSON.stringify(roles));
 };
@@ -52,21 +61,15 @@ const getDeletesHandler = (req, res) => {
 
 const deleteMultipleHandler = (req, res) => {
   if (!req.query.ids) {
-    console.warn('user message mass delete ids empty');
+    console.warn('dialect_moderation_handler::deleteMultipleHandler - user message mass delete ids empty');
     res.status(422).type('application/json').end(JSON.stringify({
       error: 'ids missing',
     }));
     return;
   }
-  let ids = req.query.ids;
-  if (ids && ids.match(/,/)) {
-    ids = ids.split(/,/);
-  }
-  if (typeof(ids) === 'string') {
-    ids = [ ids ];
-  }
+  const ids = req.query.ids.split(',');
   if (ids.length > 200) {
-    console.warn('user message mass delete too many ids, 200<', ids.length);
+    console.warn('dialect_moderation_handler::deleteMultipleHandler - user message mass delete too many ids, 200<', ids.length);
     res.status(422).type('application/json').end(JSON.stringify({
       error: 'too many ids',
     }));
