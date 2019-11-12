@@ -153,13 +153,7 @@ const modDeleteMultipleHandler = (req, res) => {
     }));
     return;
   }
-  let ids = req.query.ids;
-  if (ids && ids.match(/,/)) {
-    ids = ids.split(/,/);
-  }
-  if (typeof(ids) === 'string') {
-    ids = [ ids ];
-  }
+  const ids = req.query.ids.split(',');
   if (ids.length > 200) {
     console.warn('moderation message mass delete too many ids, 200<', ids.length);
     res.status(422).type('application/json').end(JSON.stringify({
