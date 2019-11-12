@@ -278,24 +278,6 @@ function get_deletes(channelId) {
   });
 }
 
-function get_moderators(channelId) {
-  return new Promise((resolve, rej) => {
-    describe("get moderators /loki/v1/channels/1/moderators", async function() {
-      //it("returns status code 200", async () => {
-      let result
-      try {
-        result = await overlayApi.serverRequest('loki/v1/channels/1/moderators');
-        assert.equal(200, result.statusCode);
-      } catch (e) {
-        console.error('platformApi.serverRequest err', e, result)
-        rej();
-      }
-      resolve();
-      //});
-    });
-  });
-}
-
 function create_message(channelId) {
   return new Promise((resolve, rej) => {
     describe("create message /channels/1/messages", async function() {
@@ -429,6 +411,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
         messageId2 = await create_message(channelId);
         messageId3 = await create_message(channelId);
         messageId4 = await create_message(channelId);
+        messageId5 = await create_message(channelId);
       });
       it('user cant mod delete message', async function() {
         const result = await overlayApi.serverRequest(`loki/v1/moderation/message/${messageId}`, {
@@ -445,17 +428,36 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
               ids: [messageId3, messageId4].join(',')
             }
           });
+          assert.equal(200, result.statusCode);
         } else {
-          console.log('skipping')
+          console.log('skipping');
         }
         //message = await get_message(messageId);
         //console.log('message after', message);
       });
+      it('user single delete through multi endpoint test', async function () {
+        //let message = await get_message(messageId);
+        if (messageId5) {
+          const result = await overlayApi.serverRequest('loki/v1/messages', {
+            method: 'DELETE',
+            params: {
+              ids: [messageId5].join(',')
+            }
+          });
+          assert.equal(200, result.statusCode);
+        } else {
+          console.log('skipping');
+        }
+        //message = await get_message(messageId);
+        //console.log('message after', message);
+      });
+
       it('can get deletes for channel', function() {
         get_deletes(channelId);
       });
-      it('can get moderators for channel', function() {
-        get_moderators(channelId);
+      it('can get moderators for channel', async function() {
+        result = await overlayApi.serverRequest('loki/v1/channels/1/moderators');
+        assert.equal(200, result.statusCode);
       });
       // Moderator only functions
       let modToken
@@ -505,6 +507,11 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           } else {
             console.log('skipping modSingleDelete');
           }
+        });
+        it('get moderators for channel has content', async function() {
+          result = await overlayApi.serverRequest('loki/v1/channels/1/moderators');
+          assert.equal(200, result.statusCode);
+          assert.ok(result.response.moderators.length > 0);
         });
         it('mod multi delete test', async function() {
           if (modToken && messageId1 && messageId2) {
