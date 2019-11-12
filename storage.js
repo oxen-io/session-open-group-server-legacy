@@ -16,10 +16,10 @@ memoryUpdate = function (model, filter, data, callback) {
     return data(new Error('Set parametrs undefined'), null);
   }
   filter = filter.where ? filter.where : filter;
-  var mem = this;
+  const mem = this;
 
   // filter input to make sure it only contains valid fields
-  var cleanData = this.toDatabase(model, data);
+  const cleanData = this.toDatabase(model, data);
 
   if (data.id) {
     // should find one and only one
@@ -32,16 +32,13 @@ memoryUpdate = function (model, filter, data, callback) {
     })
   } else {
     this.all(model, filter, function(err, nodes) {
-      var count = nodes.length;
-      if (!count) {
+      if (!nodes.length) {
         return callback(false, cleanData);
       }
       nodes.forEach(function(node) {
         mem.cache[model][node.id] = Object.assign(node, cleanData);
-        if (--count === 0) {
-          callback(false, cleanData);
-        }
       });
+      callback(false, cleanData);
     });
   }
 }
@@ -65,7 +62,7 @@ function start(config) {
     // alter table X MODIFY `Y` type CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
   }
 
-  var modelOptions = {
+  const modelOptions = {
     schema: schema,
   };
   funcs.forEach((func) => {
@@ -79,11 +76,8 @@ function start(config) {
   }
 }
 
-let functions = {};
-funcs.forEach((func) => {
-  functions = Object.assign(functions, func);
-});
+module.exports = {};
+funcs.map(func => Object.assign(module.exports, func));
 
-module.exports = functions;
 // override all those starts
 module.exports.start = start;
