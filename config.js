@@ -11,6 +11,12 @@ const updateFromDisk = () => {
   }
   const ini_bytes = fs.readFileSync('loki.ini');
   disk_config = ini.iniToJSON(ini_bytes.toString());
+  if (process.env.api__url) {
+    disk_config.api_url = process.env.api__url;
+  }
+  if (process.env.admin__url) {
+    disk_config.admin_url = process.env.admin__url;
+  }
   return true;
 }
 // make sure we have some config loaded
