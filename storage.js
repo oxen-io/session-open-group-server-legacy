@@ -45,8 +45,20 @@ const memoryUpdate = (model, filter, data, callback) => {
 
 function start(config) {
   // schema backend type
-  const schemaType = 'memory';
+  const schemaType = process.env.database__default__type || 'memory';
   const options = {};
+  if (process.env.database__default__options__host) {
+    options.host = process.env.database__default__options__host;
+  }
+  if (process.env.database__default__options__database) {
+    options.database = process.env.database__default__options__database;
+  }
+  if (process.env.database__default__options__username) {
+    options.username = process.env.database__default__options__username;
+  }
+  if (process.env.database__default__options__password) {
+    options.password = process.env.database__default__options__password;
+  }
   const schema = new Schema(schemaType, options);
   if (schemaType === 'memory') {
     schema.adapter.update = memoryUpdate;
