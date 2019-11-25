@@ -37,5 +37,6 @@ module.exports = (app, prefix) => {
 
   // blacklist userid
   app.post(prefix + '/loki/v1/moderation/blacklist/:id', handlers.blacklistUserFromServerHandler);
+  app.delete(prefix + '/loki/v1/moderation/blacklist/:id', handlers.unblacklistUserFromServerHandler);
 
 }
