@@ -10,10 +10,13 @@ const app = express();
 // Look for a config file
 const disk_config = config.getDiskConfig();
 
-const overlay_port = parseInt(disk_config.api.port) || 8080;
+const overlay_port = parseInt(disk_config.api && disk_config.api.port) || 8080;
 
 const config_path = path.join('./server/config.json');
 nconf.argv().env('__').file({file: config_path});
+
+const platform_api_url = disk_config.api && disk_config.api.api_url || 'http://localhost:7070/';
+const platform_admin_url = disk_config.api && disk_config.api.admin_url.replace(/\/$/, '') || 'http://localhost:3000/';
 
 // configure the admin interface for use
 // can be easily swapped out later
@@ -29,11 +32,11 @@ proxyAdmin.dispatcher = {
 if (proxyAdmin.start) {
   proxyAdmin.start(nconf);
 }
-proxyAdmin.apiroot = disk_config.api.api_url;
+proxyAdmin.apiroot = platform_api_url;
 if (proxyAdmin.apiroot.replace) {
   proxyAdmin.apiroot = proxyAdmin.apiroot.replace(/\/$/, '');
 }
-proxyAdmin.adminroot = disk_config.api.admin_url;
+proxyAdmin.adminroot = platform_admin_url;
 if (proxyAdmin.adminroot.replace) {
   proxyAdmin.adminroot = proxyAdmin.adminroot.replace(/\/$/, '');
 }
