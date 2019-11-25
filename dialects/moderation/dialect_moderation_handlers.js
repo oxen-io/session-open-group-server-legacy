@@ -212,7 +212,7 @@ const removeGlobalModerator = (req, res) => {
   });
 };
 
-const blacklistUserFromServerHandler = (req, res) => {
+const blacklistUserFromServerHandler = async (req, res) => {
   if (!req.params.id) {
     res.status(422).type('application/json').end(JSON.stringify({
       error: 'user id missing',
@@ -220,7 +220,50 @@ const blacklistUserFromServerHandler = (req, res) => {
     return;
   }
   helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
-    const result = await logic.blacklistUserFromServer(req.params.id);
+    let user = req.params.id;
+    if (user[0] == '@') {
+      const userAdnObjects = await helpers.getUsers([user]);
+      if (userAdnObjects.length == 1) {
+        user = userAdnObjects[0].id;
+      } else {
+        res.status(410).type('application/json').end(JSON.stringify({
+          error: 'user id not found',
+        }));
+        return;
+      }
+    }
+    const result = await logic.blacklistUserFromServer(user);
+    const resObj = {
+      meta: {
+        code: 200
+      },
+      data: []
+    }
+    dialect.sendResponse(resObj, res);
+  });
+}
+
+const unblacklistUserFromServerHandler = async (req, res) => {
+  if (!req.params.id) {
+    res.status(422).type('application/json').end(JSON.stringify({
+      error: 'user id missing',
+    }));
+    return;
+  }
+  helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
+    let user = req.params.id;
+    if (user[0] == '@') {
+      const userAdnObjects = await helpers.getUsers([user]);
+      if (userAdnObjects.length == 1) {
+        user = userAdnObjects[0].id;
+      } else {
+        res.status(410).type('application/json').end(JSON.stringify({
+          error: 'user id not found',
+        }));
+        return;
+      }
+    }
+    const result = await logic.unblacklistUserFromServer(user);
     const resObj = {
       meta: {
         code: 200
@@ -241,4 +284,5 @@ module.exports = {
   addGlobalModerator,
   removeGlobalModerator,
   blacklistUserFromServerHandler,
+  unblacklistUserFromServerHandler,
 };
