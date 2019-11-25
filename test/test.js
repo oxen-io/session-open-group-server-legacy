@@ -109,15 +109,20 @@ const adminApi    = new adnServerAPI(platform_admin_url, disk_config.api.modKey)
 let modPubKey = '';
 
 // grab a mod from ini
-const selectModToken = async () => {
-  if (!disk_config.globals && !weStartedOverlayServer) {
+const selectModToken = async (channelId) => {
+  //console.log('selectModToken for', channelId);
+  const modRes = await overlayApi.serverRequest(`loki/v1/channel/${channelId}/get_moderators`);
+  //console.log('modRes', modRes);
+  if (!modRes.response.moderators) {
+    console.warn('cant read moderators for channel', channelId, res);
+    return;
+  }
+  if (!modRes.response.moderators.length && !weStartedOverlayServer) {
     console.warn('no moderators configured, skipping moderation tests');
     return;
   }
-  let modKeys = []
-  if (disk_config.globals) {
-    modKeys = Object.keys(disk_config.globals);
-  }
+  const modKeys = modRes.response.moderators;
+  //console.log('found moderators', modKeys)
   let modToken = '';
   if (!modKeys.length) {
     // we started platform?
@@ -145,6 +150,7 @@ const selectModToken = async () => {
   }
   const selectedMod = Math.floor(Math.random() * modKeys.length);
   modPubKey = modKeys[selectedMod];
+  console.log('selected mod @' + modPubKey);
   if (!modPubKey) {
     console.warn('selectedMod', selectedMod, 'not in', modKeys.length);
     return;
@@ -328,6 +334,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
   describe('get our token', function() {
     it('get token', async function() {
       tokenString = await get_challenge(ourKey, ourPubKeyHex);
+      // console.log('tokenString', tokenString);
     });
     it('activate token', async function() {
       // activate token
@@ -464,7 +471,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       describe('channel moderator testing', function() {
         it('we have moderator to test with', async function() {
           // now do moderation tests
-          modToken = await selectModToken();
+          modToken = await selectModToken(channelId);
           if (!modToken) {
             console.error('No modToken, skipping moderation tests');
             // all tests should be complete
@@ -477,7 +484,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
         it('mod user info', async function() {
           // test token endpoints
           const result = await overlayApi.serverRequest('loki/v1/user_info');
-          //console.log('mod user_info result', result)
+          // console.log('mod user_info result', result)
           assert.equal(200, result.statusCode);
           assert.ok(result.response);
           assert.ok(result.response.data);
@@ -537,7 +544,25 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           assert.ok(result.response);
           assert.ok(result.response.data);
         });
-        it('blacklist', async function() {
+        it('blacklist ourself @', async function() {
+          const result = await overlayApi.serverRequest(`loki/v1/moderation/blacklist/@${ourPubKeyHex}`, {
+            method: 'POST',
+          });
+          assert.equal(200, result.statusCode);
+          assert.ok(result.response);
+          assert.ok(result.response.data);
+        });
+        it('blacklist clear', async function() {
+          const userid = await getUserID(ourPubKeyHex);
+          assert.ok(userid);
+          const result = await overlayApi.serverRequest(`loki/v1/moderation/blacklist/@${ourPubKeyHex}`, {
+            method: 'DELETE',
+          });
+          assert.equal(200, result.statusCode);
+          assert.ok(result.response);
+          assert.ok(result.response.data);
+        });
+        it('blacklist self by integer id', async function() {
           //console.log('key', ourPubKeyHex);
           const userid = await getUserID(ourPubKeyHex);
           assert.ok(userid);
@@ -558,6 +583,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           //user_info();
           try {
             const result = await platformApi.serverRequest('token');
+            // console.log('token for', platformApi.token, result);
             assert.equal(401, result.statusCode);
           } catch(e) {
             console.error('e', e);
@@ -567,6 +593,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           //user_info();
           try {
             const result = await overlayApi.serverRequest('loki/v1/user_info');
+            // console.log('token for', platformApi.token, result);
             assert.equal(401, result.statusCode);
           } catch(e) {
             console.error('e', e);
