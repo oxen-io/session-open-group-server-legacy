@@ -56,7 +56,7 @@ const validGlobal = (token, res, cb) => {
       const resObj={
         meta: {
           code: 401,
-          error_message: "Call requires authentication: Authentication required to fetch token."
+          error_message: "Call requires moderation: Moderation required for this endpoint."
         }
       };
       return dialect.sendResponse(resObj, res);
