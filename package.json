@@ -11,6 +11,7 @@
     "libsignal": "^2.0.1",
     "loki-launcher": "^1.0.0",
     "mocha": "^6.2.0",
+    "mysql": "^2.17.1",
     "nconf": "^0.10.0",
     "node-fetch": "^2.6.0",
     "request": "^2.88.0"
