@@ -231,6 +231,7 @@ function get_challenge(ourKey, ourPubKeyHex) {
       } catch (e) {
         console.error('platformApi.serverRequest err', e, result)
         tokenString = '';
+        return rej();
       }
 
       //console.log('tokenString', tokenString);
@@ -302,6 +303,7 @@ function create_message(channelId) {
           assert.equal(200, result.statusCode);
         } catch (e) {
           console.error('platformApi.serverRequest err', e, result)
+          return rej();
         }
         resolve(result.response.data.id);
       //});
@@ -610,23 +612,15 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
         });
         it('banned token vs platform', async function() {
           //user_info();
-          try {
-            const result = await platformApi.serverRequest('token');
-            // console.log('token for', platformApi.token, result);
-            assert.equal(401, result.statusCode);
-          } catch(e) {
-            console.error('e', e);
-          }
+          const result = await platformApi.serverRequest('token');
+          // console.log('token for', platformApi.token, result);
+          assert.equal(401, result.statusCode);
         });
         it('banned token vs overlay', async function() {
           //user_info();
-          try {
-            const result = await overlayApi.serverRequest('loki/v1/user_info');
-            // console.log('token for', platformApi.token, result);
-            assert.equal(401, result.statusCode);
-          } catch(e) {
-            console.error('e', e);
-          }
+          const result = await overlayApi.serverRequest('loki/v1/user_info');
+          // console.log('token for', platformApi.token, result);
+          assert.equal(401, result.statusCode);
         });
         it('try to reregister with banned token', async function() {
           // need to be able to ban it
