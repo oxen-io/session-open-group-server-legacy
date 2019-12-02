@@ -18,6 +18,9 @@ nconf.argv().env('__').file({file: config_path});
 const platform_api_url = disk_config.api && disk_config.api.api_url || 'http://localhost:7070/';
 const platform_admin_url = disk_config.api && disk_config.api.admin_url.replace(/\/$/, '') || 'http://localhost:3000/';
 
+console.log('platform_api_url', platform_api_url);
+console.log('platform_admin_url', platform_admin_url);
+
 // configure the admin interface for use
 // can be easily swapped out later
 const proxyAdmin = require('./server/dataaccess.proxy-admin');
@@ -27,6 +30,7 @@ proxyAdmin.dispatcher = {
   updateUser: (user, ts, cb) => { cb(user); },
   // ignore local message updates
   setMessage: (message, cb) => { if (cb) cb(message); },
+  setChannel: (channel, ts, cb) => { if (cb) cb(channel); },
 }
 // backward compatible
 if (proxyAdmin.start) {
@@ -139,5 +143,46 @@ const lokiDialectMountModeration = require('./dialects/moderation/dialect.loki_m
 lokiDialectMountModeration(app, '');
 // const modDialectMount = require('./dialect.webModerator');
 // modDialectMount(app, '');
+
+// preflight checks
+dataAccess.getChannel(1, (chnl, err, meta) => {
+  if (err) console.error('channel 1 get err', err);
+  if (chnl && chnl.id) {
+    return;
+  }
+  console.log('need to create channel 1!');
+  dataAccess.getUser(1, async (user, err2, meta2) => {
+    if (err2) console.error('get user 1 err', err2);
+    // if no user, create the user...
+    console.log('user', user);
+    if (!user || !user.length) {
+      console.log('need to create user 1!');
+      user = await new Promise((resolve, rej) => {
+        dataAccess.addUser('root', '', function(user, err4, meta4) {
+          if (err4) console.error('add user 1 err', err4);
+          resolve(user);
+        });
+      });
+      console.log('user', user.id, 'created!');
+    }
+    // no channel, so we need to create this public channel
+    dataAccess.addChannel(1, {
+      type: 'network.loki.messenger.chat.public',
+      reader: 0,
+      writer: 1,
+      readedit: 1,
+      writeedit: 1,
+      editedit: 1,
+      readers: [],
+      writers: [],
+      editors: [],
+    }, (chnl, err3, meta3) => {
+      if (err3) console.error('addChannel err', err3);
+      if (chnl && chnl.id) {
+        console.log('channel', chnl.id, 'created');
+      }
+    });
+  });
+});
 
 app.listen(overlay_port);
