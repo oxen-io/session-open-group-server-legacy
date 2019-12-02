@@ -27,10 +27,24 @@ services:
   traefik:
     image: "traefik:v2.0.0"
     command:
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
       - --providers.docker=true
-      - --api.insecure # Don't do that in production
+      #- --providers.docker.exposedbydefault=false
+      #- --docker.domain=ryan.lokinet.org
+      - --entrypoints.http.address=:80
+      - --entrypoints.https.address=:443
+      #- --entrypoints.http.redirect.entryPoint=https
+      #- --acme.domains.main=ryan.lokinet.org
+      - --certificatesResolvers.myhttpchal.acme.email=${EMAIL?Variable EMAIL not set}
+      - --certificatesResolvers.myhttpchal.acme.storage=acme.json
+      - --certificatesResolvers.myhttpchal.acme.httpChallenge=true
+      - --certificatesResolvers.myhttpchal.acme.httpChallenge.entryPoint=http
+      - --accessLog
+      #- --http.routers.https-redirect.rules=HostRegexp(`{any:.*}`)
+      #- --http.routers.https-redirect.rules.middlewares=["https-redirect"]
+      #- --http.middlewares.https-redirect.redirectscheme.scheme=https
+      #- --debug=true
+      #- --retry
+      #- --api.insecure # Don't do that in production
     ports:
       - "80:80"
       - "443:443"
@@ -38,6 +52,12 @@ services:
       #- "81:8080"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - ./docker/acme.json:/acme.json
+    labels:
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.routers.redirs.rule=hostregexp(`{host:.+}`)
+      - traefik.http.routers.redirs.entrypoints=http
+      - traefik.http.routers.redirs.middlewares=redirect-to-https
 
   nodepomf:
     build:
@@ -50,7 +70,8 @@ services:
       NPOMF_FILE_URL: "/f"
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.nodepomf.rule=hostregexp(`{host:.+}`) && PathPrefix(`/f`)"
+      - traefik.http.routers.nodepomf.tls.certResolver=myhttpchal
+      - traefik.http.routers.nodepomf.rule=Host(`${DOMAIN?Variable DOMAIN not set}`) && PathPrefix(`/f`)
     volumes:
       - ./data/files:/usr/src/app/files:rw
       - ./data/pomfdb:/usr/src/app/databases:rw
@@ -83,8 +104,12 @@ services:
       VIRTUAL_HOST: platform.local
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.platform.rule=hostregexp(`{host:.+}`)"
+      - traefik.http.routers.platform.tls.certResolver=myhttpchal
+      - traefik.http.routers.platform.rule=Host(`${DOMAIN?Variable DOMAIN not set}`)
       - traefik.http.services.platform.loadbalancer.server.port=7070
+    volumes:
+      - ./docker:/usr/src/app/docker:ro
+    command: ["./docker/wait-for-it/wait-for-it.sh", "mysql:3306", "--", "pm2-runtime", "app.js"]
 
   overlay:
     build: .
@@ -107,8 +132,10 @@ services:
       api__url: http://platform:7070/
       admin__url: http://platform:3000/
     labels:
-      - traefik.frontend.rule=PathPrefix:/loki/
       - traefik.enable=true
-      - "traefik.http.routers.overlay.rule=hostregexp(`{host:.+}`) && PathPrefix(`/loki`)"
+      - traefik.http.routers.overlay.tls.certResolver=myhttpchal
+      - traefik.http.routers.overlay.rule=Host(`${DOMAIN?Variable DOMAIN not set}`) && PathPrefix(`/loki`)
       - traefik.http.services.overlay.loadbalancer.server.port=8080
-
+    volumes:
+      - ./docker:/usr/src/app/docker:ro
+    command: ["./docker/wait-for-it/wait-for-it.sh", "mysql:3306", "--", "pm2-runtime", "overlay_server.js"]
