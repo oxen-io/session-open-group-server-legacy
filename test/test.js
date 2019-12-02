@@ -119,7 +119,7 @@ const selectModToken = async (channelId) => {
     return;
   }
   if (!modRes.response.moderators.length && !weStartedOverlayServer) {
-    console.warn('no moderators configured, skipping moderation tests');
+    console.warn('no moderators for channel', channelId + ', cant addTempMod skipping moderation tests');
     return;
   }
   const modKeys = modRes.response.moderators;
@@ -145,7 +145,7 @@ const selectModToken = async (channelId) => {
       await promise;
       return modToken;
     } else {
-      console.warn('no moderators configured, skipping moderation tests');
+      console.warn('no moderators configured and cant addTempMod, skipping moderation tests');
       return;
     }
   }
@@ -611,12 +611,20 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           overlayApi.token = tokenString;
         });
         it('banned token vs platform', async function() {
+          if (!modToken) {
+            console.log('no mods skipping');
+            return;
+          }
           //user_info();
           const result = await platformApi.serverRequest('token');
           // console.log('token for', platformApi.token, result);
           assert.equal(401, result.statusCode);
         });
         it('banned token vs overlay', async function() {
+          if (!modToken) {
+            console.log('no mods skipping');
+            return;
+          }
           //user_info();
           const result = await overlayApi.serverRequest('loki/v1/user_info');
           // console.log('token for', platformApi.token, result);
