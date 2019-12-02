@@ -15,16 +15,17 @@ const ADN_SCOPES = 'basic stream write_post follow messages update_profile files
 const disk_config = config.getDiskConfig();
 
 //console.log('disk_config', disk_config)
-const overlay_port = parseInt(disk_config.api.port) || 8080;
+const overlay_host = process.env.overlay__host || 'localhost';
+const overlay_port = parseInt(disk_config.api && disk_config.api.port) || 8080;
 // has to have the trailing slash
-const overlay_url = 'http://localhost:' + overlay_port + '/';
+const overlay_url = 'http://' + overlay_host + ':' + overlay_port + '/';
 
 const config_path = path.join(__dirname, '/../server/config.json');
 nconf.argv().env('__').file({file: config_path});
 console.log('config_path', config_path);
 
-const platform_api_url = disk_config.api.api_url;
-const platform_admin_url = disk_config.api.admin_url.replace(/\/$/, '');
+const platform_api_url = disk_config.api && disk_config.api.api_url || 'http://localhost:7070/';
+const platform_admin_url = disk_config.api && disk_config.api.admin_url.replace(/\/$/, '') || 'http://localhost:3000/';
 
 // configure the admin interface for use
 // can be easily swapped out later
@@ -40,11 +41,11 @@ proxyAdmin.dispatcher = {
 if (proxyAdmin.start) {
   proxyAdmin.start(nconf);
 }
-proxyAdmin.apiroot = disk_config.api.api_url;
+proxyAdmin.apiroot = platform_api_url;
 if (proxyAdmin.apiroot.replace) {
   proxyAdmin.apiroot = proxyAdmin.apiroot.replace(/\/$/, '');
 }
-proxyAdmin.adminroot = disk_config.api.admin_url;
+proxyAdmin.adminroot = platform_admin_url;
 if (proxyAdmin.adminroot.replace) {
   proxyAdmin.adminroot = proxyAdmin.adminroot.replace(/\/$/, '');
 }
@@ -62,7 +63,7 @@ const ensurePlatformServer = () => {
         process.env.web__port = platformURL.port;
         const platformAdminURL = new URL(platform_admin_url);
         process.env.admin__port = platformAdminURL.port;
-        process.env.admin__modKey = disk_config.api.modKey?disk_config.api.modKey:'123abc';
+        process.env.admin__modKey = disk_config.api && disk_config.api.modKey || '123abc';
         const startPlatform = require('../server/app');
 
         // probably don't need this wait
@@ -90,7 +91,7 @@ let weStartedOverlayServer = false;
 const ensureOverlayServer = () => {
   return new Promise((resolve, rej) => {
     console.log('overlay port', overlay_port);
-    lokinet.portIsFree('localhost', overlay_port, function(free) {
+    lokinet.portIsFree(overlay_host, overlay_port, function(free) {
       if (free) {
         const startPlatform = require('../overlay_server');
         weStartedOverlayServer = true;
@@ -104,7 +105,7 @@ const ensureOverlayServer = () => {
 
 const overlayApi  = new adnServerAPI(overlay_url);
 const platformApi = new adnServerAPI(platform_api_url);
-const adminApi    = new adnServerAPI(platform_admin_url, disk_config.api.modKey);
+const adminApi    = new adnServerAPI(platform_admin_url, disk_config.api && disk_config.api.modKey || '123abc');
 
 let modPubKey = '';
 
@@ -327,7 +328,7 @@ function get_message(messageId) {
 }
 
 const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
-  let channelId = 3; // default channel to try to test first
+  let channelId = 1; // default channel to try to test first
 
   // get our token
   let tokenString, userid, mod_userid;
@@ -482,6 +483,10 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           overlayApi.token = modToken;
         });
         it('mod user info', async function() {
+          if (!modToken) {
+            console.log('no mods skipping');
+            return;
+          }
           // test token endpoints
           const result = await overlayApi.serverRequest('loki/v1/user_info');
           // console.log('mod user_info result', result)
@@ -503,6 +508,10 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           assert.equal(401, result.statusCode);
         });
         it('mod delete test', async function() {
+          if (!modToken) {
+            console.log('no mods skipping');
+            return;
+          }
           overlayApi.token = modToken; // switch back to mod
           if (modToken && messageId) {
             //let message = await get_message(messageId);
@@ -516,6 +525,10 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           }
         });
         it('get moderators for channel has content', async function() {
+          if (!modToken) {
+            console.log('no mods skipping');
+            return;
+          }
           result = await overlayApi.serverRequest('loki/v1/channels/1/moderators');
           assert.equal(200, result.statusCode);
           assert.ok(result.response.moderators.length > 0);
@@ -537,6 +550,10 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
 
       describe('blacklist testing', function() {
         it('make sure token is still valid', async function() {
+          if (!modToken) {
+            console.log('no mods skipping');
+            return;
+          }
           // test token endpoints
           const result = await overlayApi.serverRequest('loki/v1/user_info');
           //console.log('user user_info result', result)
@@ -545,6 +562,10 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           assert.ok(result.response.data);
         });
         it('blacklist ourself @', async function() {
+          if (!modToken) {
+            console.log('no mods skipping');
+            return;
+          }
           const result = await overlayApi.serverRequest(`loki/v1/moderation/blacklist/@${ourPubKeyHex}`, {
             method: 'POST',
           });
@@ -553,6 +574,10 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           assert.ok(result.response.data);
         });
         it('blacklist clear', async function() {
+          if (!modToken) {
+            console.log('no mods skipping');
+            return;
+          }
           const userid = await getUserID(ourPubKeyHex);
           assert.ok(userid);
           const result = await overlayApi.serverRequest(`loki/v1/moderation/blacklist/@${ourPubKeyHex}`, {
@@ -563,6 +588,10 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           assert.ok(result.response.data);
         });
         it('blacklist self by integer id', async function() {
+          if (!modToken) {
+            console.log('no mods skipping');
+            return;
+          }
           //console.log('key', ourPubKeyHex);
           const userid = await getUserID(ourPubKeyHex);
           assert.ok(userid);
@@ -600,6 +629,11 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           }
         });
         it('try to reregister with banned token', async function() {
+          // need to be able to ban it
+          if (!modToken) {
+            console.log('no mods skipping');
+            return;
+          }
           const result = await overlayApi.serverRequest('loki/v1/get_challenge', {
             params: {
              pubKey: ourPubKeyHex
