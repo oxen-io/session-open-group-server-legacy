@@ -12,10 +12,12 @@ const updateFromDisk = () => {
   const ini_bytes = fs.readFileSync('loki.ini');
   disk_config = ini.iniToJSON(ini_bytes.toString());
   if (process.env.api__url) {
-    disk_config.api_url = process.env.api__url;
+    // console.log('setting api.api_url to', process.env.api__url, 'from environment');
+    disk_config.api.api_url = process.env.api__url;
   }
   if (process.env.admin__url) {
-    disk_config.admin_url = process.env.admin__url;
+    // console.log('setting api.admin_url to', process.env.api__url, 'from environment');
+    disk_config.api.admin_url = process.env.admin__url;
   }
   return true;
 }
@@ -53,5 +55,8 @@ module.exports = {
   setup,
   addTempModerator,
   getUserAccess,
-  getDiskConfig: () => { return disk_config },
+  getDiskConfig: () => {
+    // console.log('disk_config', disk_config);
+    return disk_config
+  },
 };
