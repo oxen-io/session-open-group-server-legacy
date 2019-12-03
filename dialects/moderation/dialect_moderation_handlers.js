@@ -1,12 +1,16 @@
 const helpers = require('./dialect_moderation_helpers');
+const adnServerAPI = require('../../fetchWrapper');
 
 // all input / output filtering should happen here
 
-let cache, dialect, logic, storage
+let cache, dialect, logic, storage, platformApi;
 const setup = (utilties) => {
   // config are also available here
   ({ cache, dialect, logic, storage } = utilties);
   helpers.setup(utilties);
+  const disk_config = config.getDiskConfig();
+  const platform_api_url = disk_config.api && disk_config.api.api_url || 'http://localhost:7070/';
+  platformApi = new adnServerAPI(platform_api_url);
 };
 
 const getChannelModeratorsHandler = async (req, res) => {
@@ -42,6 +46,44 @@ const getChannelModeratorsHandler = async (req, res) => {
   }
   res.status(200).type('application/json').end(JSON.stringify(roles));
 };
+
+const moderatorUpdateChannel = async (req, res) => {
+  const channelId = parseInt(req.params.id);
+  if (isNaN(channelId)) {
+    console.warn('id is not a number');
+    res.status(400).type('application/json').end(JSON.stringify({
+      error: 'id not a valid number',
+    }));
+  }
+  helpers.validGlobal(req.token, res, (usertoken, access_list) => {
+    // console.log('body', req.body)
+    cache.getChannel(channelId, {} , function(channel, err) {
+      if (err) console.error(err);
+      // console.log('channel', channel);
+      if (channel === null) {
+        return res.status(500).type('application/json').end(JSON.stringify({
+          error: err,
+          stub: 'channel_is_null',
+        }));
+      }
+      cache.getAPITokenByUsername(channel.owner.username, async function(token, err) {
+        if (err) console.error(err);
+        // console.log('token', token);
+        // now place a normal request to the platform...
+        const oldToken = platformApi.token;
+        platformApi.token = token.token;
+        const result = await platformApi.serverRequest(`channels/${channelId}`, {
+          method: 'PUT',
+
+          objBody: req.body
+        });
+        platformApi.token = oldToken;
+        //console.log('result', result);
+        res.status(result.statusCode).type('application/json').end(JSON.stringify(result));
+      });
+    });
+  });
+}
 
 const getDeletesHandler = (req, res) => {
   const numId = parseInt(req.params.id);
@@ -277,6 +319,7 @@ const unblacklistUserFromServerHandler = async (req, res) => {
 module.exports = {
   setup,
   getChannelModeratorsHandler,
+  moderatorUpdateChannel,
   getDeletesHandler,
   deleteMultipleHandler,
   modDeleteSingleHandler,
