@@ -145,7 +145,15 @@ lokiDialectMountModeration(app, '');
 // modDialectMount(app, '');
 
 // preflight checks
-dataAccess.getChannel(1, (chnl, err, meta) => {
+const addChannelNote = (channelId) => {
+  var defaultObj = {"name":"Your Public Chat","description":"Your public chat room","avatar":"images/group_default.png"};
+  dataAccess.addAnnotation('channel', channelId, 'net.patter-app.settings', defaultObj, function(rec, err, meta) {
+    if (err) console.error('err', err);
+    console.log('rec', rec, 'meta', meta);
+  });
+}
+
+dataAccess.getChannel(1, {}, (chnl, err, meta) => {
   if (err) console.error('channel 1 get err', err);
   if (chnl && chnl.id) {
     return;
@@ -181,8 +189,17 @@ dataAccess.getChannel(1, (chnl, err, meta) => {
       if (chnl && chnl.id) {
         console.log('channel', chnl.id, 'created');
       }
+      addChannelNote(chnl.id);
     });
   });
+});
+dataAccess.getAnnotations('channel', 1, (notes, err, meta) => {
+  if (err) console.error('getAnnotations channel err', err);
+  //console.log('notes', notes);
+  if (!notes || !notes.length) {
+    console.log('adding note')
+    addChannelNote(1);
+  }
 });
 
 app.listen(overlay_port);
