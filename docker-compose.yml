@@ -29,19 +29,13 @@ services:
     command:
       - --providers.docker=true
       #- --providers.docker.exposedbydefault=false
-      #- --docker.domain=ryan.lokinet.org
       - --entrypoints.http.address=:80
       - --entrypoints.https.address=:443
-      #- --entrypoints.http.redirect.entryPoint=https
-      #- --acme.domains.main=ryan.lokinet.org
       - --certificatesResolvers.myhttpchal.acme.email=${EMAIL?Variable EMAIL not set}
       - --certificatesResolvers.myhttpchal.acme.storage=acme.json
       - --certificatesResolvers.myhttpchal.acme.httpChallenge=true
       - --certificatesResolvers.myhttpchal.acme.httpChallenge.entryPoint=http
       - --accessLog
-      #- --http.routers.https-redirect.rules=HostRegexp(`{any:.*}`)
-      #- --http.routers.https-redirect.rules.middlewares=["https-redirect"]
-      #- --http.middlewares.https-redirect.redirectscheme.scheme=https
       #- --debug=true
       #- --retry
       #- --api.insecure # Don't do that in production
@@ -63,7 +57,7 @@ services:
     build:
       context: https://github.com/odilitime/nodepomf.git
     expose:
-      - "3000"
+      - "80"
     environment:
       NPOMF_DB_FILENAME: ./databases/pomf_files.db
       NPOMF_MAX_UPLOAD_SIZE: 1000000 # 10mb
@@ -82,10 +76,7 @@ services:
       - mysql
       - redis
       - nodepomf
-    #expose:
-    #  - "7070"
-    #  - "3000"
-    ports:
+    expose:
       - "7070"
       - "3000"
     environment:
@@ -109,14 +100,14 @@ services:
       - traefik.http.services.platform.loadbalancer.server.port=7070
     volumes:
       - ./docker:/usr/src/app/docker:ro
-    command: ["./docker/wait-for-it/wait-for-it.sh", "mysql:3306", "--", "pm2-runtime", "app.js"]
+    entrypoint: ["./docker/wait-for-it/wait-for-it.sh", "mysql:3306", "--", "./docker/wait-for-it/wait-for-it.sh", "redis:6379", "--", "./docker/wait-for-it/wait-for-it.sh", "nodepomf:80", "--", "pm2-runtime", "app.js"]
 
   overlay:
     build: .
     depends_on:
       - mysql
       - platform
-    ports:
+    expose:
       - "8080"
     environment:
       MYSQL_INIT_DB: publicchat_test
@@ -138,4 +129,4 @@ services:
       - traefik.http.services.overlay.loadbalancer.server.port=8080
     volumes:
       - ./docker:/usr/src/app/docker:ro
-    command: ["./docker/wait-for-it/wait-for-it.sh", "mysql:3306", "--", "pm2-runtime", "overlay_server.js"]
+    entrypoint: ["./docker/wait-for-it/wait-for-it.sh", "mysql:3306", "--", "./docker/wait-for-it/wait-for-it.sh", "platform:7070", "--", "pm2-runtime", "overlay_server.js"]
