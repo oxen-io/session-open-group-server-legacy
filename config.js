@@ -5,7 +5,10 @@ let disk_config = {};
 
 let cache, storage;
 
+// phase 1
+
 const updateFromDisk = () => {
+  console.log('updateFromDisk - start');
   if (!fs.existsSync('loki.ini')) {
     return false;
   }
@@ -19,24 +22,34 @@ const updateFromDisk = () => {
     // console.log('setting api.admin_url to', process.env.api__url, 'from environment');
     disk_config.api.admin_url = process.env.admin__url;
   }
+  console.log('updateFromDisk - done');
   return true;
 }
 // make sure we have some config loaded
+// to configure cache
 updateFromDisk();
+
+// phase 2
 
 const setup = (configObject) => {
   // start setting things up
   ({ cache, storage } = configObject);
 
+  // now that we have cache
+  updateUserAccess();
+
   // keep disk_config fresh-ish
   setInterval(updateUserAccess, 15 * 60 * 1000); // every 15 mins
 }
 
+let user_access = {};
+
 const updateUserAccess = () => {
   if (!updateFromDisk()) {
+    console.log('no config file');
     return;
   }
-  // console.log('config', disk_config);
+  console.log('config', disk_config);
   // reset permissions to purge any deletions
   user_access = {};
   // load globals pubkeys from file and set their access level
@@ -60,6 +73,17 @@ const addTempModerator = async (userid) => {
   await storage.addServerModerator(userid);
 }
 
+const getConfigGlobals = async() => {
+  const globals = [];
+  for(var uid in user_access) {
+    var access = user_access[uid]
+    if (access === true) {
+      globals.push(uid);
+    }
+  }
+  return globals;
+}
+
 // FIXME: move out
 // called by validGlobal
 const getUserAccess = async (userid) => {
@@ -81,6 +105,7 @@ module.exports = {
   setup,
   addTempModerator,
   getUserAccess,
+  getConfigGlobals,
   getDiskConfig: () => {
     // console.log('disk_config', disk_config);
     return disk_config
