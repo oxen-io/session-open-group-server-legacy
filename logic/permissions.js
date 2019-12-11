@@ -111,7 +111,9 @@ module.exports = {
     // look for perm value of 1
   },
   getModeratorsByChannelId: async (channelId, cb) => {
-    const mods = await storage.getModeratorsByChannelId(channelId);
+    let mods = await storage.getModeratorsByChannelId(channelId);
+    const configMods = await config.getConfigGlobals();
+    mods = [...mods, configMods];
     return mods;
   },
   addGlobalModerator: async userid => {
