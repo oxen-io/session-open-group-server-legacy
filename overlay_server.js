@@ -50,7 +50,7 @@ app.use(bodyParser.urlencoded({
 }));
 
 app.all('/*', (req, res, next) => {
-  console.log('got request', req.path);
+  console.log('got request', req.method, req.path);
   res.start = new Date().getTime();
   origin = req.get('Origin') || '*';
   res.set('Access-Control-Allow-Origin', origin);
