@@ -1,0 +1,132 @@
+version: '3.1'
+services:
+  mysql:
+    image: "mysql:5.7"
+    command: mysqld --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    restart: always
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "true"
+    expose:
+      - "3306"
+    labels:
+      - traefik.enable=false
+    volumes:
+      - ./docker:/docker-entrypoint-initdb.d:ro
+      - ./data/mysql:/var/lib/mysql:rw
+
+  redis:
+    image: redis
+    healthcheck:
+      test: ["CMD", "redis-cli","ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - traefik.enable=false
+
+  traefik:
+    image: "traefik:v2.0.0"
+    command:
+      - --providers.docker=true
+      #- --providers.docker.exposedbydefault=false
+      - --entrypoints.http.address=:80
+      - --entrypoints.https.address=:443
+      - --certificatesResolvers.myhttpchal.acme.email=${EMAIL?Variable EMAIL not set}
+      - --certificatesResolvers.myhttpchal.acme.storage=acme.json
+      - --certificatesResolvers.myhttpchal.acme.httpChallenge=true
+      - --certificatesResolvers.myhttpchal.acme.httpChallenge.entryPoint=http
+      - --accessLog
+      #- --debug=true
+      #- --retry
+      #- --api.insecure # Don't do that in production
+    ports:
+      - "80:80"
+      - "443:443"
+      # dev hack, remove for production...
+      #- "81:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - ./docker/acme.json:/acme.json
+    labels:
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.routers.redirs.rule=hostregexp(`{host:.+}`)
+      - traefik.http.routers.redirs.entrypoints=http
+      - traefik.http.routers.redirs.middlewares=redirect-to-https
+
+  nodepomf:
+    build:
+      context: https://github.com/odilitime/nodepomf.git
+    expose:
+      - "80"
+    environment:
+      NPOMF_DB_FILENAME: ./databases/pomf_files.db
+      NPOMF_MAX_UPLOAD_SIZE: 1000000 # 10mb
+      NPOMF_FILE_URL: "/f"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.nodepomf.tls.certResolver=myhttpchal
+      - traefik.http.routers.nodepomf.rule=Host(`${DOMAIN?Variable DOMAIN not set}`) && PathPrefix(`/f`)
+    volumes:
+      - ./data/files:/usr/src/app/files:rw
+      - ./data/pomfdb:/usr/src/app/databases:rw
+
+  platform:
+    build: server
+    depends_on:
+      - mysql
+      - redis
+      - nodepomf
+    expose:
+      - "7070"
+      - "3000"
+    environment:
+      stream__host: redis
+      web__listen: platform
+      admin__listen: platform
+      admin__modKey: enableAdmin
+      database__default__type: mysql
+      database__default__options__database: lmpc_platform
+      database__default__options__host: mysql
+      database__default__options__username: platform
+      database__default__options__password: publicchat_test
+      pomf__provider: "nodepomf"
+      pomf__provider_url: "http://nodepomf/upload"
+      VIRTUAL_PORT: 7070
+      VIRTUAL_HOST: platform.local
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.platform.tls.certResolver=myhttpchal
+      - traefik.http.routers.platform.rule=Host(`${DOMAIN?Variable DOMAIN not set}`)
+      - traefik.http.services.platform.loadbalancer.server.port=7070
+    volumes:
+      - ./docker:/usr/src/app/docker:ro
+    entrypoint: ["./docker/wait-for-it/wait-for-it.sh", "mysql:3306", "--", "./docker/wait-for-it/wait-for-it.sh", "redis:6379", "--", "./docker/wait-for-it/wait-for-it.sh", "nodepomf:80", "--", "pm2-runtime", "app.js"]
+
+  overlay:
+    build: .
+    depends_on:
+      - mysql
+      - platform
+    expose:
+      - "8080"
+    environment:
+      MYSQL_INIT_DB: publicchat_test
+      VIRTUAL_PORT: 8080
+      web__listen: platform
+      admin__listen: platform
+      admin__modKey: enableAdmin
+      database__default__type: mysql
+      database__default__options__database: lmpc_overlay
+      database__default__options__host: mysql
+      database__default__options__username: overlay
+      database__default__options__password: publicchat_test
+      api__url: http://platform:7070/
+      admin__url: http://platform:3000/
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.overlay.tls.certResolver=myhttpchal
+      - traefik.http.routers.overlay.rule=Host(`${DOMAIN?Variable DOMAIN not set}`) && PathPrefix(`/loki`)
+      - traefik.http.services.overlay.loadbalancer.server.port=8080
+    volumes:
+      - ./docker:/usr/src/app/docker:ro
+    entrypoint: ["./docker/wait-for-it/wait-for-it.sh", "mysql:3306", "--", "./docker/wait-for-it/wait-for-it.sh", "platform:7070", "--", "pm2-runtime", "overlay_server.js"]
