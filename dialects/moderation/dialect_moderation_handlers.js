@@ -187,8 +187,10 @@ const addGlobalModerator = (req, res) => {
     if (!usertoken.userid) {
       console.error('handlers::addGlobalModerator - no userid in', usertoken);
     }
-    console.log('handlers::addGlobalModerator - upgrading', usertoken.userid, 'to global moderator');
-    res.data = await storage.addServerModerator(usertoken.userid);
+    // FIXME: support users by username
+    const userid = parseInt(req.params.id);
+    console.log('handlers::addGlobalModerator - upgrading', userid, 'to global moderator');
+    res.data = await storage.addServerModerator(userid);
     dialect.sendResponse(resObj, res);
   });
 };
@@ -201,7 +203,8 @@ const removeGlobalModerator = (req, res) => {
     return;
   }
   helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
-    res.data = await storage.removeServerModerator(usertoken.userid);
+    const userid = parseInt(req.params.id);
+    res.data = await storage.removeServerModerator(userid);
     const resObj = {
       meta: {
         code: 200
