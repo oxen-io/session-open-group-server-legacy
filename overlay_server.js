@@ -159,6 +159,7 @@ dataAccess.getChannel(1, {}, (chnl, err, meta) => {
     return;
   }
   console.log('need to create channel 1!');
+  // FIXME: user token_helpers's findOrCreateUser?
   dataAccess.getUser(1, async (user, err2, meta2) => {
     if (err2) console.error('get user 1 err', err2);
     // if no user, create the user...
