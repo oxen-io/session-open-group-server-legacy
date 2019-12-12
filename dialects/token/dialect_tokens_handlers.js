@@ -2,10 +2,10 @@ const helpers = require('./dialect_tokens_helpers');
 
 // all input / output filtering should happen here
 
-let cache, dialect;
+let cache, dialect, config;
 const setup = (utilties) => {
   // config are also available here
-  ({ cache, dialect, logic } = utilties);
+  ({ cache, dialect, logic, config } = utilties);
   helpers.setup(utilties);
 };
 
@@ -64,7 +64,13 @@ const submitChallengeHandler = async (req, res) => {
   }
   helpers.confirmToken(pubKey, token).then(confirmation => {
     // confirmation should be true
-    res.status(200).end();
+    if (confirmation === true) {
+      // refresh mods, to reduce wait time for an INI reload
+      config.updateUserAccess();
+      res.status(200).end();
+    } else {
+      res.status(500).end();
+    }
   }).catch(err => {
     console.log(`Error confirming challenge: ${err}`);
     // handle errors we know
