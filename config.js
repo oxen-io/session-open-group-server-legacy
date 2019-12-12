@@ -8,7 +8,6 @@ let cache, storage;
 // phase 1
 
 const updateFromDisk = () => {
-  console.log('updateFromDisk - start');
   if (!fs.existsSync('loki.ini')) {
     return false;
   }
@@ -22,7 +21,6 @@ const updateFromDisk = () => {
     // console.log('setting api.admin_url to', process.env.api__url, 'from environment');
     disk_config.api.admin_url = process.env.admin__url;
   }
-  console.log('updateFromDisk - done');
   return true;
 }
 // make sure we have some config loaded
@@ -57,10 +55,11 @@ const updateUserAccess = () => {
     const access = disk_config.globals[pubKey];
     // translate pubKey to id of user
     cache.getUserID(pubKey, (user, err) => {
-      //console.log('setting', user.id, 'to', access);
       // only if user has registered
       if (user) {
         user_access[user.id] = access;
+      } else {
+        console.log('global', pubKey, 'has not registered yet');
       }
     })
   }
@@ -106,6 +105,7 @@ module.exports = {
   addTempModerator,
   getUserAccess,
   getConfigGlobals,
+  updateUserAccess,
   getDiskConfig: () => {
     // console.log('disk_config', disk_config);
     return disk_config
