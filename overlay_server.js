@@ -193,6 +193,8 @@ dataAccess.getChannel(1, {}, (chnl, err, meta) => {
     });
   });
 });
+// the race was causing this to create a duplicate annotation
+/*
 dataAccess.getAnnotations('channel', 1, (notes, err, meta) => {
   if (err) console.error('getAnnotations channel err', err);
   //console.log('notes', notes);
@@ -201,5 +203,6 @@ dataAccess.getAnnotations('channel', 1, (notes, err, meta) => {
     addChannelNote(1);
   }
 });
+*/
 
 app.listen(overlay_port);
