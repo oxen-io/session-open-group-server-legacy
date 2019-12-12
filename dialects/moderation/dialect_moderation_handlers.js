@@ -1,5 +1,6 @@
 const helpers = require('./dialect_moderation_helpers');
 const adnServerAPI = require('../../fetchWrapper');
+const token_helpers = require('../token/dialect_tokens_helpers');
 
 // all input / output filtering should happen here
 
@@ -8,6 +9,7 @@ const setup = (utilties) => {
   // config are also available here
   ({ cache, dialect, logic, storage } = utilties);
   helpers.setup(utilties);
+  token_helpers.setup(utilties);
   const disk_config = config.getDiskConfig();
   const platform_api_url = disk_config.api && disk_config.api.api_url || 'http://localhost:7070/';
   platformApi = new adnServerAPI(platform_api_url);
@@ -17,7 +19,7 @@ const getChannelModeratorsHandler = async (req, res) => {
   const channelId = parseInt(req.params.id);
   if (isNaN(channelId)) {
     console.warn('id is not a number');
-    res.status(400).type('application/json').end(JSON.stringify({
+    return res.status(400).type('application/json').end(JSON.stringify({
       error: 'id not a valid number',
     }));
   }
@@ -51,7 +53,7 @@ const moderatorUpdateChannel = async (req, res) => {
   const channelId = parseInt(req.params.id);
   if (isNaN(channelId)) {
     console.warn('id is not a number');
-    res.status(400).type('application/json').end(JSON.stringify({
+    return res.status(400).type('application/json').end(JSON.stringify({
       error: 'id not a valid number',
     }));
   }
@@ -67,19 +69,45 @@ const moderatorUpdateChannel = async (req, res) => {
         }));
       }
       cache.getAPITokenByUsername(channel.owner.username, async function(token, err) {
-        if (err) console.error(err);
+        if (err) console.error('getAPITokenByUsername err', err);
         // console.log('token', token);
-        // now place a normal request to the platform...
-        const oldToken = platformApi.token;
-        platformApi.token = token.token;
-        const result = await platformApi.serverRequest(`channels/${channelId}`, {
-          method: 'PUT',
 
-          objBody: req.body
-        });
-        platformApi.token = oldToken;
-        //console.log('result', result);
-        res.status(result.statusCode).type('application/json').end(JSON.stringify(result));
+        const applyUpdate = async (token) => {
+          // now place a normal request to the platform...
+          const oldToken = platformApi.token;
+          platformApi.token = token;
+          const result = await platformApi.serverRequest(`channels/${channelId}`, {
+            method: 'PUT',
+            objBody: req.body
+          });
+          platformApi.token = oldToken;
+          // console.log('result', result);
+          res.status(result.statusCode).type('application/json').end(JSON.stringify(result));
+        }
+
+        if (token !== null) {
+          return applyUpdate(token);
+        }
+        // we don't yet have a token for that user, so create it
+        // find an available token
+        const newToken = await token_helpers.createToken(channel.owner.username);
+        if (!newToken) {
+          console.error('cant generate token, how is this possible?');
+          return res.status(500).type('application/json').end(JSON.stringify({
+            error: err,
+            stub: 'channel_is_null',
+          }));
+        }
+        // claim token (make it work)
+        const confirmed = await token_helpers.claimToken(channel.owner.username, newToken);
+        if (!confirmed) {
+          console.error('cant confirm token');
+          return res.status(500).type('application/json').end(JSON.stringify({
+            error: err,
+            stub: 'channel_is_null',
+          }));
+        }
+        applyUpdate(newToken);
       });
     });
   });
