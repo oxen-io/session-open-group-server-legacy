@@ -70,7 +70,6 @@ const moderatorUpdateChannel = async (req, res) => {
       }
       cache.getAPITokenByUsername(channel.owner.username, async function(token, err) {
         if (err) console.error('getAPITokenByUsername err', err);
-        // console.log('token', token);
 
         const applyUpdate = async (token) => {
           // now place a normal request to the platform...
@@ -81,12 +80,11 @@ const moderatorUpdateChannel = async (req, res) => {
             objBody: req.body
           });
           platformApi.token = oldToken;
-          // console.log('result', result);
           res.status(result.statusCode).type('application/json').end(JSON.stringify(result));
         }
 
         if (token !== null) {
-          return applyUpdate(token);
+          return applyUpdate(token.token);
         }
         // we don't yet have a token for that user, so create it
         // find an available token
