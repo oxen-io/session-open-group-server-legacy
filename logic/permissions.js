@@ -111,7 +111,9 @@ module.exports = {
     // look for perm value of 1
   },
   getModeratorsByChannelId: async (channelId, cb) => {
-    const mods = await storage.getModeratorsByChannelId(channelId);
+    let mods = await storage.getModeratorsByChannelId(channelId);
+    const configMods = await config.getConfigGlobals();
+    mods = [...mods, configMods];
     return mods;
   },
   addGlobalModerator: async userid => {
@@ -160,7 +162,7 @@ module.exports = {
     // mark the database as such, so they can't get any new tokens
     const result = await storage.blacklistUserFromServer(userid);
     if (!result) {
-      console.warn('logic:::permissions::blacklistUserFromServer - failed to blacklist');
+      console.warn('logic:::permissions::blacklistUserFromServer - failed to blacklist', result);
       return false;
     }
     // get username, so we can query token by username
@@ -175,4 +177,21 @@ module.exports = {
     }
     return true;
   },
+  unblacklistUserFromServer: async userid => {
+    if (userid === undefined) {
+      console.error('logic::permission:unblacklistUserFromServer -  given a user_id that is undefined');
+      return false;
+    }
+    const alreadyBlacklisted = await storage.isBlacklisted(userid);
+    if (!alreadyBlacklisted) {
+      console.warn('logic:::permissions::unblacklistUserFromServer - ', userid, 'is not blacklisted');
+      return true;
+    }
+    // mark the database as such, so they can get new tokens
+    const result = await storage.unblacklistUserFromServer(userid);
+    if (!result) {
+      console.warn('logic:::permissions::unblacklistUserFromServer - failed to blacklist');
+      return false;
+    }
+  }
 }

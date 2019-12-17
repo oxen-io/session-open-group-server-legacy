@@ -131,7 +131,7 @@ const createToken = (pubKey) => {
           token = generateString();
           inUse = await findToken(token);
         }
-        res(token)
+        res(token);
       })
       .catch(e => {
         rej(e);
@@ -216,15 +216,8 @@ const getChallenge = async (pubKey) => {
   };
 }
 
-// getChallenge only sends token encrypted
-// so if we guess a pubKey's token that we've generated, we grant access
-const confirmToken = (pubKey, token) => {
+const claimToken = (pubKey, token) => {
   return new Promise(async (res, rej) => {
-    // Check to ensure the token submitted has been generated in the last 2 minutes
-    if (!checkTempStorageForToken(token)) {
-      console.log('token', token, 'not in', getTempTokenList());
-      return rej('invalid');
-    }
     // Token has been recently generated
     // finally ensure user for pubKey
     const userObj = await findOrCreateUser(pubKey);
@@ -237,18 +230,37 @@ const confirmToken = (pubKey, token) => {
         // we'll keep the token in the temp storage, so they can retry
         return rej('tokenCreation');
       }
-      // if no, err we assume everything is fine...
-      // ok token is now registered
-      // remove from temp storage
-      deleteTempStorageForToken(pubKey, token);
       // return success
       res(true);
     });
   });
 }
 
+// getChallenge only sends token encrypted
+// so if we guess a pubKey's token that we've generated, we grant access
+const confirmToken = (pubKey, token) => {
+  return new Promise(async (resolve, rej) => {
+    // Check to ensure the token submitted has been generated in the last 2 minutes
+    if (!checkTempStorageForToken(token)) {
+      console.log('token', token, 'not in', getTempTokenList());
+      return rej('invalid');
+    }
+    const res = await claimToken(pubKey, token);
+    if (!res) {
+      return rej('cant claim');
+    }
+    // if no, err we assume everything is fine...
+    // ok token is now registered
+    // remove from temp storage
+    deleteTempStorageForToken(pubKey, token);
+    resolve(true);
+  });
+}
+
 module.exports = {
   setup,
   getChallenge,
+  createToken,
+  claimToken,
   confirmToken
 }

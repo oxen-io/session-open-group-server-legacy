@@ -16,6 +16,9 @@ module.exports = (app, prefix) => {
   // new official
   app.get(prefix + '/loki/v1/channels/:id/moderators', handlers.getChannelModeratorsHandler);
 
+  app.put(prefix + '/loki/v1/channels/:id', handlers.moderatorUpdateChannel);
+
+
   // get a list of deletes in a channel
   // backwards compatibility
   app.get(prefix + '/loki/v1/channel/:id/deletes', handlers.getDeletesHandler);
@@ -37,5 +40,6 @@ module.exports = (app, prefix) => {
 
   // blacklist userid
   app.post(prefix + '/loki/v1/moderation/blacklist/:id', handlers.blacklistUserFromServerHandler);
+  app.delete(prefix + '/loki/v1/moderation/blacklist/:id', handlers.unblacklistUserFromServerHandler);
 
 }

@@ -1,19 +1,25 @@
 const helpers = require('./dialect_moderation_helpers');
+const adnServerAPI = require('../../fetchWrapper');
+const token_helpers = require('../token/dialect_tokens_helpers');
 
 // all input / output filtering should happen here
 
-let cache, dialect, logic, storage
+let cache, dialect, logic, storage, platformApi;
 const setup = (utilties) => {
   // config are also available here
   ({ cache, dialect, logic, storage } = utilties);
   helpers.setup(utilties);
+  token_helpers.setup(utilties);
+  const disk_config = config.getDiskConfig();
+  const platform_api_url = disk_config.api && disk_config.api.api_url || 'http://localhost:7070/';
+  platformApi = new adnServerAPI(platform_api_url);
 };
 
 const getChannelModeratorsHandler = async (req, res) => {
   const channelId = parseInt(req.params.id);
   if (isNaN(channelId)) {
     console.warn('id is not a number');
-    res.status(400).type('application/json').end(JSON.stringify({
+    return res.status(400).type('application/json').end(JSON.stringify({
       error: 'id not a valid number',
     }));
   }
@@ -42,6 +48,68 @@ const getChannelModeratorsHandler = async (req, res) => {
   }
   res.status(200).type('application/json').end(JSON.stringify(roles));
 };
+
+const moderatorUpdateChannel = async (req, res) => {
+  const channelId = parseInt(req.params.id);
+  if (isNaN(channelId)) {
+    console.warn('id is not a number');
+    return res.status(400).type('application/json').end(JSON.stringify({
+      error: 'id not a valid number',
+    }));
+  }
+  helpers.validGlobal(req.token, res, (usertoken, access_list) => {
+    // console.log('body', req.body)
+    cache.getChannel(channelId, {} , function(channel, err) {
+      if (err) console.error(err);
+      // console.log('channel', channel);
+      if (channel === null) {
+        return res.status(500).type('application/json').end(JSON.stringify({
+          error: err,
+          stub: 'channel_is_null',
+        }));
+      }
+      cache.getAPITokenByUsername(channel.owner.username, async function(token, err) {
+        if (err) console.error('getAPITokenByUsername err', err);
+
+        const applyUpdate = async (token) => {
+          // now place a normal request to the platform...
+          const oldToken = platformApi.token;
+          platformApi.token = token;
+          const result = await platformApi.serverRequest(`channels/${channelId}`, {
+            method: 'PUT',
+            objBody: req.body
+          });
+          platformApi.token = oldToken;
+          res.status(result.statusCode).type('application/json').end(JSON.stringify(result));
+        }
+
+        if (token !== null) {
+          return applyUpdate(token.token);
+        }
+        // we don't yet have a token for that user, so create it
+        // find an available token
+        const newToken = await token_helpers.createToken(channel.owner.username);
+        if (!newToken) {
+          console.error('cant generate token, how is this possible?');
+          return res.status(500).type('application/json').end(JSON.stringify({
+            error: err,
+            stub: 'channel_is_null',
+          }));
+        }
+        // claim token (make it work)
+        const confirmed = await token_helpers.claimToken(channel.owner.username, newToken);
+        if (!confirmed) {
+          console.error('cant confirm token');
+          return res.status(500).type('application/json').end(JSON.stringify({
+            error: err,
+            stub: 'channel_is_null',
+          }));
+        }
+        applyUpdate(newToken);
+      });
+    });
+  });
+}
 
 const getDeletesHandler = (req, res) => {
   const numId = parseInt(req.params.id);
@@ -187,8 +255,10 @@ const addGlobalModerator = (req, res) => {
     if (!usertoken.userid) {
       console.error('handlers::addGlobalModerator - no userid in', usertoken);
     }
-    console.log('handlers::addGlobalModerator - upgrading', usertoken.userid, 'to global moderator');
-    res.data = await storage.addServerModerator(usertoken.userid);
+    // FIXME: support users by username
+    const userid = parseInt(req.params.id);
+    console.log('handlers::addGlobalModerator - upgrading', userid, 'to global moderator');
+    res.data = await storage.addServerModerator(userid);
     dialect.sendResponse(resObj, res);
   });
 };
@@ -201,7 +271,8 @@ const removeGlobalModerator = (req, res) => {
     return;
   }
   helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
-    res.data = await storage.removeServerModerator(usertoken.userid);
+    const userid = parseInt(req.params.id);
+    res.data = await storage.removeServerModerator(userid);
     const resObj = {
       meta: {
         code: 200
@@ -212,7 +283,7 @@ const removeGlobalModerator = (req, res) => {
   });
 };
 
-const blacklistUserFromServerHandler = (req, res) => {
+const blacklistUserFromServerHandler = async (req, res) => {
   if (!req.params.id) {
     res.status(422).type('application/json').end(JSON.stringify({
       error: 'user id missing',
@@ -220,7 +291,50 @@ const blacklistUserFromServerHandler = (req, res) => {
     return;
   }
   helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
-    const result = await logic.blacklistUserFromServer(req.params.id);
+    let user = req.params.id;
+    if (user[0] == '@') {
+      const userAdnObjects = await helpers.getUsers([user]);
+      if (userAdnObjects.length == 1) {
+        user = userAdnObjects[0].id;
+      } else {
+        res.status(410).type('application/json').end(JSON.stringify({
+          error: 'user id not found',
+        }));
+        return;
+      }
+    }
+    const result = await logic.blacklistUserFromServer(user);
+    const resObj = {
+      meta: {
+        code: 200
+      },
+      data: []
+    }
+    dialect.sendResponse(resObj, res);
+  });
+}
+
+const unblacklistUserFromServerHandler = async (req, res) => {
+  if (!req.params.id) {
+    res.status(422).type('application/json').end(JSON.stringify({
+      error: 'user id missing',
+    }));
+    return;
+  }
+  helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
+    let user = req.params.id;
+    if (user[0] == '@') {
+      const userAdnObjects = await helpers.getUsers([user]);
+      if (userAdnObjects.length == 1) {
+        user = userAdnObjects[0].id;
+      } else {
+        res.status(410).type('application/json').end(JSON.stringify({
+          error: 'user id not found',
+        }));
+        return;
+      }
+    }
+    const result = await logic.unblacklistUserFromServer(user);
     const resObj = {
       meta: {
         code: 200
@@ -234,6 +348,7 @@ const blacklistUserFromServerHandler = (req, res) => {
 module.exports = {
   setup,
   getChannelModeratorsHandler,
+  moderatorUpdateChannel,
   getDeletesHandler,
   deleteMultipleHandler,
   modDeleteSingleHandler,
@@ -241,4 +356,5 @@ module.exports = {
   addGlobalModerator,
   removeGlobalModerator,
   blacklistUserFromServerHandler,
+  unblacklistUserFromServerHandler,
 };

@@ -35,6 +35,7 @@ function validUser(token, res, cb) {
             error_message: err
           }
         };
+        console.error('error trying to verify token:', token);
         sendResponse(resObj, res);
         return resolve();
       }
@@ -46,6 +47,7 @@ function validUser(token, res, cb) {
             error_message: "Call requires authentication: Authentication required to fetch token."
           }
         };
+        console.error('token does not exist:', token);
         sendResponse(resObj, res);
         return resolve();
       }

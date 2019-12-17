@@ -10,10 +10,16 @@ const app = express();
 // Look for a config file
 const disk_config = config.getDiskConfig();
 
-const overlay_port = parseInt(disk_config.api.port) || 8080;
+const overlay_port = parseInt(disk_config.api && disk_config.api.port) || 8080;
 
 const config_path = path.join('./server/config.json');
 nconf.argv().env('__').file({file: config_path});
+
+const platform_api_url = disk_config.api && disk_config.api.api_url || 'http://localhost:7070/';
+const platform_admin_url = disk_config.api && disk_config.api.admin_url.replace(/\/$/, '') || 'http://localhost:3000/';
+
+console.log('platform_api_url', platform_api_url);
+console.log('platform_admin_url', platform_admin_url);
 
 // configure the admin interface for use
 // can be easily swapped out later
@@ -24,16 +30,17 @@ proxyAdmin.dispatcher = {
   updateUser: (user, ts, cb) => { cb(user); },
   // ignore local message updates
   setMessage: (message, cb) => { if (cb) cb(message); },
+  setChannel: (channel, ts, cb) => { if (cb) cb(channel); },
 }
 // backward compatible
 if (proxyAdmin.start) {
   proxyAdmin.start(nconf);
 }
-proxyAdmin.apiroot = disk_config.api.api_url;
+proxyAdmin.apiroot = platform_api_url;
 if (proxyAdmin.apiroot.replace) {
   proxyAdmin.apiroot = proxyAdmin.apiroot.replace(/\/$/, '');
 }
-proxyAdmin.adminroot = disk_config.api.admin_url;
+proxyAdmin.adminroot = platform_admin_url;
 if (proxyAdmin.adminroot.replace) {
   proxyAdmin.adminroot = proxyAdmin.adminroot.replace(/\/$/, '');
 }
@@ -47,7 +54,7 @@ app.use(bodyParser.urlencoded({
 }));
 
 app.all('/*', (req, res, next) => {
-  console.log('got request', req.path);
+  console.log('got request', req.method, req.path);
   res.start = new Date().getTime();
   origin = req.get('Origin') || '*';
   res.set('Access-Control-Allow-Origin', origin);
@@ -136,5 +143,67 @@ const lokiDialectMountModeration = require('./dialects/moderation/dialect.loki_m
 lokiDialectMountModeration(app, '');
 // const modDialectMount = require('./dialect.webModerator');
 // modDialectMount(app, '');
+
+// preflight checks
+const addChannelNote = (channelId) => {
+  var defaultObj = {"name":"Your Public Chat","description":"Your public chat room","avatar":"images/group_default.png"};
+  dataAccess.addAnnotation('channel', channelId, 'net.patter-app.settings', defaultObj, function(rec, err, meta) {
+    if (err) console.error('err', err);
+    console.log('rec', rec, 'meta', meta);
+  });
+}
+
+dataAccess.getChannel(1, {}, (chnl, err, meta) => {
+  if (err) console.error('channel 1 get err', err);
+  if (chnl && chnl.id) {
+    return;
+  }
+  console.log('need to create channel 1!');
+  // FIXME: user token_helpers's findOrCreateUser?
+  dataAccess.getUser(1, async (user, err2, meta2) => {
+    if (err2) console.error('get user 1 err', err2);
+    // if no user, create the user...
+    console.log('user', user);
+    if (!user || !user.length) {
+      console.log('need to create user 1!');
+      user = await new Promise((resolve, rej) => {
+        dataAccess.addUser('root', '', function(user, err4, meta4) {
+          if (err4) console.error('add user 1 err', err4);
+          resolve(user);
+        });
+      });
+      console.log('user', user.id, 'created!');
+    }
+    // no channel, so we need to create this public channel
+    dataAccess.addChannel(1, {
+      type: 'network.loki.messenger.chat.public',
+      reader: 0,
+      writer: 1,
+      readedit: 1,
+      writeedit: 1,
+      editedit: 1,
+      readers: [],
+      writers: [],
+      editors: [],
+    }, (chnl, err3, meta3) => {
+      if (err3) console.error('addChannel err', err3);
+      if (chnl && chnl.id) {
+        console.log('channel', chnl.id, 'created');
+      }
+      addChannelNote(chnl.id);
+    });
+  });
+});
+// the race was causing this to create a duplicate annotation
+/*
+dataAccess.getAnnotations('channel', 1, (notes, err, meta) => {
+  if (err) console.error('getAnnotations channel err', err);
+  //console.log('notes', notes);
+  if (!notes || !notes.length) {
+    console.log('adding note')
+    addChannelNote(1);
+  }
+});
+*/
 
 app.listen(overlay_port);

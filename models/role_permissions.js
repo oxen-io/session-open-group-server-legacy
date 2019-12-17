@@ -220,21 +220,38 @@ module.exports = {
     })
     return channels;
   },
-  blacklistUserFromServer: async user_id => {
-    if (user_id === undefined) {
-      console.error('role_permissions:blacklistUserFromServer given a user_id that is undefined');
-      return;
-    }
-    const permission = new permissionModel;
-    permission.entity_type = 'user';
-    permission.entity_id = user_id;
-    permission.object = 'server';
-    permission.object_id = 0;
-    permission.allowed = -1;
-    permission.moderator = -1;
-    permission.moderator.ord = 0;
-    await permission.save();
-    return true;
+  blacklistUserFromServer: user_id => {
+    return new Promise(async (resolve, rej) => {
+      if (user_id === undefined) {
+        console.error('role_permissions:blacklistUserFromServer given a user_id that is undefined');
+        return;
+      }
+      permissionModel.find({ where: {
+        entity_type: 'user', entity_id: user_id, object: 'server', object_id: 0
+      }, order: 'ord'}, async (err, permissions) => {
+        if (err) console.error('storage:::role_permissions::unblacklistUserFromServer err', err);
+        if (permissions.length) {
+          await Promise.all(
+            permissions.map(async perm => {
+              perm.allowed = -1;
+              perm.moderator = -1;
+              await perm.save();
+            })
+          );
+          return resolve(true);
+        }
+        const permission = new permissionModel;
+        permission.entity_type = 'user';
+        permission.entity_id = user_id;
+        permission.object = 'server';
+        permission.object_id = 0;
+        permission.allowed = -1;
+        permission.moderator = -1;
+        permission.moderator.ord = 0;
+        await permission.save();
+        resolve(true);
+      });
+    });
   },
   isBlacklisted: async user_id => {
     if (user_id === undefined) {
@@ -245,9 +262,10 @@ module.exports = {
     if (!userPerms || !userPerms.length) {
       // no entries at all
       // FIXME: look up server default
+      console.log('role_permissions:isBlacklisted - no perms for', user_id);
       return false;
     }
-    const perms = userPerms.pop()
+    const perms = userPerms.pop();
     const triboolPerms = [ 'allowed' ];
     userPerms.map( perm_obj => {
       triboolPerms.map( perm => {
@@ -255,12 +273,32 @@ module.exports = {
         if (perm_obj[perm] === -1) perms[perm] = -1;
         // if 1 enable
         else if (perm_obj[perm] === 1) perms[perm] = 1;
-      })
-    })
+      });
+    });
     if (perms['allowed'] !== -1 && perms['allowed'] !== 1) {
       // FIXME: look up server default
       // write back to perms['allowed']
     }
     return perms['allowed'] === -1;
   },
-}
+  unblacklistUserFromServer: async user_id => {
+    if (user_id === undefined) {
+      console.error('role_permissions:unblacklistUserFromServer given a user_id that is undefined');
+      return;
+    }
+    permissionModel.find({ where: {
+      entity_type: 'user', entity_id: user_id, object: 'server', object_id: 0
+    }, order: 'ord'}, async (err, permissions) => {
+      if (err) console.error('storage:::role_permissions::unblacklistUserFromServer err', err);
+      if (!permissions || !permissions.length) {
+        return;
+      }
+      await Promise.all(
+        permissions.map(async perm => {
+          perm.allowed = 1;
+          await perm.save();
+        })
+      );
+    });
+    return true;
+  },}
