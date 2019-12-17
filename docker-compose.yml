@@ -61,11 +61,11 @@ services:
     environment:
       NPOMF_DB_FILENAME: ./databases/pomf_files.db
       NPOMF_MAX_UPLOAD_SIZE: 1000000 # 10mb
-      NPOMF_FILE_URL: "/f"
+      NPOMF_FILE_URL: "https://${DOMAIN?Variable DOMAIN not set}/f"
     labels:
       - traefik.enable=true
       - traefik.http.routers.nodepomf.tls.certResolver=myhttpchal
-      - traefik.http.routers.nodepomf.rule=Host(`${DOMAIN?Variable DOMAIN not set}`) && PathPrefix(`/f`)
+      - traefik.http.routers.nodepomf.rule=Host(`${DOMAIN?Variable DOMAIN not set}`) && PathPrefix(`/f/`)
     volumes:
       - ./data/files:/usr/src/app/files:rw
       - ./data/pomfdb:/usr/src/app/databases:rw
