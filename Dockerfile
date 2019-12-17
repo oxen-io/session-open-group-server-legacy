@@ -3,15 +3,16 @@ RUN npm i -g pm2
 
 WORKDIR /usr/src/app
 
-COPY *.js /usr/src/app/
 COPY package.json /usr/src/app/package.json
 COPY package-lock.json /usr/src/app/package-lock.json
+RUN npm i
+
+COPY *.js /usr/src/app/
 COPY dialects/ dialects/
 COPY logic/ logic/
 COPY models/ models/
 COPY test/ test/
 
-RUN npm i
 COPY loki_template.ini loki.ini
 
 # we do need proxy-admin
