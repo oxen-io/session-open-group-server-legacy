@@ -8,8 +8,11 @@ System requirements:
 - A storage engine supported by [camintejs](https://github.com/biggora/caminte) for persistence
   - Recommended: MySQL/MariaDB, SQLite3, PostgresQL, Redis
   - Possible: Mongo, CouchDB, Neo4j, Cassandra, Riak, Firebird, TingoDB, RethikDB, ArangoDB
+- A pomf compatible service for attachments
 
-set up instructions may look something like
+Check our Wiki for complete instruction
+
+Manual set up instructions (without attachment support) may look like:
 ```
 git submodule init
 git submodule update
