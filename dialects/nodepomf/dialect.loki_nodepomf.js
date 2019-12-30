@@ -1,6 +1,7 @@
 const overlay = require('../../lib.overlay');
 const http = require('http');
 const pathUtil = require('path');
+const fs = require('fs');
 const express = require('express');
 const lokinet = require('loki-launcher/lokinet');
 
@@ -16,8 +17,8 @@ module.exports = (app, prefix) => {
   }
   var dir = pathUtil.dirname(process.env.NPOMF_DB_FILENAME)
   if (!fs.existsSync(dir)) {
-    console.log('creating nodepomf database directory', dir)
-    lokinet.mkDirByPathSync(dir)
+    console.log('creating nodepomf database directory', dir);
+    lokinet.mkDirByPathSync(dir);
   }
 
   if (process.env.NPOMF_MAX_UPLOAD_SIZE === undefined) {
@@ -39,12 +40,12 @@ module.exports = (app, prefix) => {
   // console.log('relative? download path', fileUploadPath)
   // make sure it's an absolute path
   if (fileUploadPath[0] !== '/') {
-    fileUploadPath = pathUtil.join(process.cwd(), fileUploadPath)
+    fileUploadPath = pathUtil.join(process.cwd(), fileUploadPath);
   }
   // console.log('absolute path', fileUploadPath)
   if (!fs.existsSync(fileUploadPath)) {
-    console.log('creating nodepomf files directory', fileUploadPath)
-    lokinet.mkDirByPathSync(fileUploadPath)
+    console.log('creating nodepomf files directory', fileUploadPath);
+    lokinet.mkDirByPathSync(fileUploadPath);
   }
 
   const nodepomf  = require('../../nodepomf/app');
@@ -62,9 +63,7 @@ module.exports = (app, prefix) => {
   });
   */
 
-  app.use(prefix + '/f', function(req, res, next) {
-    express.static(fileUploadPath)(req, res, next)
-  });
+  app.use(prefix + '/f', express.static(fileUploadPath));
 
   // only pass through /f requests
   /*
