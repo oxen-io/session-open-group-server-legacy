@@ -13,16 +13,16 @@ const ADN_SCOPES = 'basic stream write_post follow messages update_profile files
 
 // Look for a config file
 const disk_config = config.getDiskConfig();
-
 //console.log('disk_config', disk_config)
-const overlay_host = process.env.overlay__host || 'localhost';
-const overlay_port = parseInt(disk_config.api && disk_config.api.port) || 8080;
-// has to have the trailing slash
-const overlay_url = 'http://' + overlay_host + ':' + overlay_port + '/';
 
-const config_path = path.join(__dirname, '/../server/config.json');
+const config_path = path.join(__dirname, '/../config.json');
 nconf.argv().env('__').file({file: config_path});
 console.log('config_path', config_path);
+
+const overlay_host = process.env.overlay__host || 'localhost';
+const overlay_port = parseInt(disk_config.api && disk_config.api.port) || nconf.get('web:port') || 7070;
+// has to have the trailing slash
+const overlay_url = 'http://' + overlay_host + ':' + overlay_port + '/';
 
 const platform_api_url = disk_config.api && disk_config.api.api_url || 'http://localhost:7070/';
 const platform_admin_url = disk_config.api && disk_config.api.admin_url.replace(/\/$/, '') || 'http://localhost:3000/';
@@ -52,49 +52,14 @@ if (proxyAdmin.adminroot.replace) {
 
 const cache = proxyAdmin
 
-const ensurePlatformServer = () => {
+let weStartedUnifiedServer = false;
+const ensureUnifiedServer = () => {
   return new Promise((resolve, rej) => {
-    const platformURL = new URL(platform_api_url);
-    console.log('platform port', platformURL.port);
-    lokinet.portIsFree(platformURL.hostname, platformURL.port, function(free) {
-      if (free) {
-        // ini overrides server/config.json in unit testing (if platform isn't running where it should)
-        // override any config to make sure it runs the way we request
-        process.env.web__port = platformURL.port;
-        const platformAdminURL = new URL(platform_admin_url);
-        process.env.admin__port = platformAdminURL.port;
-        process.env.admin__modKey = disk_config.api && disk_config.api.modKey || '123abc';
-        const startPlatform = require('../server/app');
-
-        // probably don't need this wait
-        function portNowClaimed() {
-          lokinet.portIsFree(platformURL.hostname, platformURL.port, function(free) {
-            if (!free) {
-              console.log(platformURL.port, 'now claimed')
-              resolve();
-            } else {
-              setTimeout(portNowClaimed, 100)
-            }
-          })
-        }
-        portNowClaimed()
-
-      } else {
-        console.log('detected running platform server using that');
-        resolve();
-      }
-    })
-  });
-};
-
-let weStartedOverlayServer = false;
-const ensureOverlayServer = () => {
-  return new Promise((resolve, rej) => {
-    console.log('overlay port', overlay_port);
+    console.log('unified port', nconf.get('web:port'));
     lokinet.portIsFree(overlay_host, overlay_port, function(free) {
       if (free) {
         const startPlatform = require('../overlay_server');
-        weStartedOverlayServer = true;
+        weStartedUnifiedServer = true;
       } else {
         console.log('detected running overlay server testing that');
       }
@@ -118,7 +83,7 @@ const selectModToken = async (channelId) => {
     console.warn('cant read moderators for channel', channelId, res);
     return;
   }
-  if (!modRes.response.moderators.length && !weStartedOverlayServer) {
+  if (!modRes.response.moderators.length && !weStartedUnifiedServer) {
     console.warn('no moderators for channel', channelId + ', cant addTempMod skipping moderation tests');
     return;
   }
@@ -127,7 +92,7 @@ const selectModToken = async (channelId) => {
   let modToken = '';
   if (!modKeys.length) {
     // we started platform?
-    if (weStartedOverlayServer) {
+    if (weStartedUnifiedServer) {
       console.warn('test.js - no moderators configured and we control overlayServer, creating temporary moderator');
       const ourModKey = libsignal.curve.generateKeyPair();
       // encode server's pubKey in base64
@@ -652,9 +617,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
 // you can't use => with mocha, you'll loose this context
 before(async function() {
   //this.timeout(60 * 1000); // can't be in an arrow function
-  await ensurePlatformServer();
-  console.log('platform ready');
-  await ensureOverlayServer();
-  console.log('overlay ready');
+  await ensureUnifiedServer();
+  console.log('unified server ready');
 })
 runIntegrationTests(ourKey, ourPubKeyHex);
