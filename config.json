@@ -1,0 +1,48 @@
+{
+  "pomf": {
+    "provider": "nodepomf-internal",
+    "provider_url": "http://127.0.0.1:7070/upload"
+  },
+  "web": {
+    "port": 7070,
+    "listen": "127.0.0.1",
+    "mounts": [
+      {
+        "destination": "",
+        "dialect": "appdotnet_official"
+      },
+      {
+        "destination": "/stream/0",
+        "dialect": "appdotnet_official"
+      },
+      {
+        "destination": "",
+        "dialect": "../dialects/token/dialect.loki_tokens"
+      },
+      {
+        "destination": "",
+        "dialect": "../dialects/moderation/dialect.loki_moderation"
+      },
+      {
+        "destination": "",
+        "dialect": "../dialects/nodepomf/dialect.loki_nodepomf"
+      }
+    ]
+  },
+  "admin": {
+    "listen": "127.0.0.1",
+    "port": 3000,
+    "modKey": "CHANGE_ME"
+  },
+  "stream": {
+    "host": "127.0.0.1",
+    "port": 6379
+  },
+  "database": {
+    "default": {
+      "type": "memory",
+      "options": {
+      }
+    }
+  }
+}
