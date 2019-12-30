@@ -25,7 +25,7 @@ const overlay_port = parseInt(disk_config.api && disk_config.api.port) || nconf.
 const overlay_url = 'http://' + overlay_host + ':' + overlay_port + '/';
 
 const platform_api_url = disk_config.api && disk_config.api.api_url || 'http://localhost:7070/';
-const platform_admin_url = disk_config.api && disk_config.api.admin_url.replace(/\/$/, '') || 'http://localhost:3000/';
+const platform_admin_url = disk_config.api && disk_config.api.admin_url && disk_config.api.admin_url.replace(/\/$/, '') || 'http://localhost:3000/';
 
 // configure the admin interface for use
 // can be easily swapped out later
@@ -103,8 +103,11 @@ const selectModToken = async (channelId) => {
       // now elevate to a moderator
       var promise = new Promise( (resolve,rej) => {
         cache.getUserID(modPubKey, async (user, err) => {
-          await config.addTempModerator(user.id)
-          resolve()
+          if (err) console.error('getUserID err', err, user);
+          if (user && user.id) {
+            await config.addTempModerator(user.id);
+          }
+          resolve();
         });
       });
       await promise;
@@ -234,7 +237,7 @@ function getUserID(pubKey) {
   return new Promise((resolve, rej) => {
     cache.getUserID(pubKey, function(user, err, meta) {
       //assert.equal(200, result.statusCode);
-      resolve(user.id);
+      resolve(user && user.id);
     });
   });
 }
@@ -265,6 +268,13 @@ function create_message(channelId) {
             },
           });
           //console.log('create message result', result, 'token', platformApi.token);
+          if (result.statusCode === 401) {
+            console.error('used token', platformApi.token);
+            const linfo = await overlayApi.serverRequest('loki/v1/user_info');
+            console.log('lokiInfo', linfo);
+            const tinfo = await platformApi.serverRequest('token');
+            console.log('tokenInfo', tinfo);
+          }
           assert.equal(200, result.statusCode);
         } catch (e) {
           console.error('platformApi.serverRequest err', e, result)
@@ -378,7 +388,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           console.log('created channel', channelId);
         }
       });
-      let messageId, messageId1, messageId2, messageId3, messageId4
+      let messageId, messageId1, messageId2, messageId3, messageId4, messageId5
       it('create message to test with', async function() {
         // well we need to create a new message for moderation test
         messageId = await create_message(channelId);
