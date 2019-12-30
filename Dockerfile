@@ -13,14 +13,22 @@ COPY logic/ logic/
 COPY models/ models/
 COPY test/ test/
 
-COPY loki_template.ini loki.ini
-
-# we do need proxy-admin
-COPY server/ server/
-# RUN git submodule update --init --recursive
-WORKDIR /usr/src/app/server
+# set up nodepomf
+COPY nodepomf/ nodepomf/
+WORKDIR /usr/src/app/nodepomf
+RUN sed -i 's/"^3.0.10"/"^4.1.1"/' package.json
 RUN npm i
 WORKDIR /usr/src/app
+
+# set up platform
+COPY server/ server/
+WORKDIR /usr/src/app/server
+RUN npm i
+
+WORKDIR /usr/src/app
+
+COPY config.json config.json
+COPY loki_template.ini loki.ini
 
 EXPOSE 8080
 ENTRYPOINT ["pm2-runtime", "overlay_server.js"]
