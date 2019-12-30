@@ -34,10 +34,6 @@
     "port": 3000,
     "modKey": "CHANGE_ME"
   },
-  "stream": {
-    "host": "127.0.0.1",
-    "port": 6379
-  },
   "database": {
     "default": {
       "type": "memory",
