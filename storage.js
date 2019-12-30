@@ -59,6 +59,16 @@ function start(config) {
   if (process.env.database__default__options__password) {
     options.password = process.env.database__default__options__password;
   }
+
+  if (process.env.database__overlay__options__username) {
+    options.username = process.env.database__overlay__options__username;
+  }
+  if (process.env.database__overlay__options__password) {
+    options.password = process.env.database__overlay__options__password;
+  }
+  if (process.env.database__overlay__options__database) {
+    options.database = process.env.database__overlay__options__database;
+  }
   const schema = new Schema(schemaType, options);
   if (schemaType === 'memory') {
     schema.adapter.update = memoryUpdate;
