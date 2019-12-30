@@ -44,12 +44,12 @@ module.exports = (app, prefix) => {
   });
   */
 
-  app.use(prefix + '/f', function(req, res) {
+  app.use(prefix + '/f', function(req, res, next) {
     var fileUploadPath = process.env.NPOMF_UPLOAD_DIRECTORY ? process.env.NPOMF_UPLOAD_DIRECTORY : 'files'
     console.log('relative? download path', fileUploadPath)
     var path = pathUtil.join(process.cwd(), fileUploadPath)
     console.log('absolute download path', path)
-    express.static(path)(req, res)
+    express.static(path)(req, res, next)
   });
 
   // only pass through /f requests
