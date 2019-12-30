@@ -16,7 +16,6 @@ COPY test/ test/
 # set up nodepomf
 COPY nodepomf/ nodepomf/
 WORKDIR /usr/src/app/nodepomf
-RUN sed -i 's/"^3.0.10"/"^4.1.1"/' package.json
 RUN npm i
 WORKDIR /usr/src/app
 
