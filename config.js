@@ -44,7 +44,7 @@ let user_access = {};
 
 const updateUserAccess = () => {
   if (!updateFromDisk()) {
-    console.log('no config file');
+    console.log('overlay:::config.js - no loki.ini config file');
     return;
   }
   console.log('config', disk_config);
