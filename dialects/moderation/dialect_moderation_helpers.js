@@ -19,29 +19,51 @@ const getUser = (userid) => {
   });
 };
 
-const getUsers = (userids) => {
-  return new Promise((res, rej) => {
-    let results = [];
-    let requests = 0;
-    let responses = 0;
-    let next200 = userids.splice(0, 200);
-    while(next200.length) {
-      requests++;
+const getUsers = async (userids) => {
+  const count = userids.length;
+  let results = [];
+  let next200 = userids.splice(0, 200);
+  const promises = [];
+  while(next200.length) {
 
-      // allow them to overlap
-      cache.getUsers(next200, {}, (users, err) => {
-        if (err) {
-          return rej(err);
-        }
-        results = results.concat(users);
-        responses++;
-        if (requests === responses) {
-          return res(results);
-        }
-      });
-      next200 = userids.splice(0, 200);
+    // partition next200
+    const [intList, userList] = next200.reduce((result, user) => {
+      const isUsername = user[0] === '@';
+      result[isUsername ? 1 : 0].push(isUsername ? user.substr(1) : user)
+      return result
+    }, [[], []]);
+
+    // handle integer lookups
+    if (intList.length) {
+      promises.push(new Promise( (resolve, reject) => {
+        cache.getUsers(intList, {}, (users, err) => {
+          if (err) {
+            return reject(err);
+          }
+          results = results.concat(users);
+          return resolve(results);
+        });
+      }));
     }
-  });
+
+    // handle username lookups
+    userList.forEach(username => {
+      promises.push(new Promise((resolve, reject) => {
+        cache.getUserID(username, (userObj, err) => {
+          if (err) {
+            return reject(err);
+          }
+          results = results.concat([userObj]);
+          return resolve(results);
+        });
+      }));
+    });
+
+    next200 = userids.splice(0, 200);
+  }
+  // console.log('getUsers awaiting', promises.length, 'promises for', count, 'user object lookups');
+  await Promise.all(promises);
+  return results; // array of model constructors
 };
 
 const validGlobal = (token, res, cb) => {
