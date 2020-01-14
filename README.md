@@ -27,3 +27,13 @@ cp config.sample.json config.json
 # edit config.json
 pm2 start app.js --watch --name "platform"
 ```
+
+# Popular linux distribution instructions to install NodeJS
+
+Ubuntu NodeJS installation:
+
+`curl -sL https://deb.nodesource.com/setup_12.x | sudo bash -`
+
+then
+
+`sudo apt-get install -y nodejs`
