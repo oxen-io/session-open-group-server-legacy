@@ -6,7 +6,8 @@ an Express REST API for serving persistence history public chat rooms for Loki M
 System requirements:
 - NodeJS
 - A storage engine supported by [camintejs](https://github.com/biggora/caminte) for persistence
-  - Recommended: MySQL/MariaDB, SQLite3, PostgresQL, Redis
+  - Recommended: Mysql/MariaDB
+  - Suggested: MySQL/MariaDB, SQLite3, PostgresQL, Redis
   - Possible: Mongo, CouchDB, Neo4j, Cassandra, Riak, Firebird, TingoDB, RethikDB, ArangoDB
 
 Check our [docs.loki.network](https://docs.loki.network/LokiServices/Messenger/public_channel_setup/) for complete instruction
