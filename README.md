@@ -1,16 +1,15 @@
 # loki-messenger-public-server
 Loki Messenger public chat server
 
-an express REST API for serving persistence history public chat rooms for Loki Messenger. It's run by 2 daemons, the platform servers providing an ADN standard REST API and another with Loki Messenger specific behaviors (crypto-key registration and enhanced moderation functions).
+an Express REST API for serving persistence history public chat rooms for Loki Messenger. 
 
 System requirements:
 - NodeJS
 - A storage engine supported by [camintejs](https://github.com/biggora/caminte) for persistence
   - Recommended: MySQL/MariaDB, SQLite3, PostgresQL, Redis
   - Possible: Mongo, CouchDB, Neo4j, Cassandra, Riak, Firebird, TingoDB, RethikDB, ArangoDB
-- A pomf compatible service for attachments
 
-Check our Wiki for complete instruction
+Check our [docs.loki.network](https://docs.loki.network/LokiServices/Messenger/public_channel_setup/) for complete instruction
 
 Manual set up instructions (without attachment support) may look like:
 ```
