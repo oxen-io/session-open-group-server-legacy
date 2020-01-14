@@ -53,46 +53,37 @@ services:
       - traefik.http.routers.redirs.entrypoints=http
       - traefik.http.routers.redirs.middlewares=redirect-to-https
 
-  nodepomf:
-    build:
-      context: https://github.com/odilitime/nodepomf.git
-    expose:
-      - "80"
-    environment:
-      NPOMF_DB_FILENAME: ./databases/pomf_files.db
-      NPOMF_MAX_UPLOAD_SIZE: 1000000 # 10mb
-      NPOMF_FILE_URL: "https://${DOMAIN?Variable DOMAIN not set}/f"
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.nodepomf.tls.certResolver=myhttpchal
-      - traefik.http.routers.nodepomf.rule=Host(`${DOMAIN?Variable DOMAIN not set}`) && PathPrefix(`/f/`)
-    volumes:
-      - ./data/files:/usr/src/app/files:rw
-      - ./data/pomfdb:/usr/src/app/databases:rw
-
-  platform:
-    build: server
+  unified:
+    build: .
     depends_on:
       - mysql
       - redis
-      - nodepomf
     expose:
       - "7070"
       - "3000"
     environment:
       stream__host: redis
-      web__listen: platform
-      admin__listen: platform
+      web__listen: unified
+      admin__listen: unified
       admin__modKey: enableAdmin
       database__default__type: mysql
       database__default__options__database: lmpc_platform
       database__default__options__host: mysql
       database__default__options__username: platform
       database__default__options__password: publicchat_test
-      pomf__provider: "nodepomf"
-      pomf__provider_url: "http://nodepomf/upload"
+      database__overlay__options__username: overlay
+      database__overlay__options__password: publicchat_test
+      database__overlay__options__database: lmpc_overlay
+      #pomf__provider: "nodepomf"
+      #pomf__provider_url: "http://nodepomf/upload"
+      # these are defaults...
+      #NPOMF_DB_FILENAME: ./databases/pomf_files.db
+      #NPOMF_MAX_UPLOAD_SIZE: 1000000 # 10mb
+      NPOMF_FILE_URL: "https://${DOMAIN?Variable DOMAIN not set}/f"
+      #api__url: http://unified:7070/
+      #admin__url: http://unified:3000/
       VIRTUAL_PORT: 7070
-      VIRTUAL_HOST: platform.local
+      VIRTUAL_HOST: unified.local
     labels:
       - traefik.enable=true
       - traefik.http.routers.platform.tls.certResolver=myhttpchal
@@ -100,34 +91,7 @@ services:
       - traefik.http.services.platform.loadbalancer.server.port=7070
     volumes:
       - ./docker:/usr/src/app/docker:ro
-    entrypoint: ["./docker/wait-for-it/wait-for-it.sh", "mysql:3306", "--", "./docker/wait-for-it/wait-for-it.sh", "redis:6379", "--", "./docker/wait-for-it/wait-for-it.sh", "nodepomf:80", "--", "pm2-runtime", "app.js"]
-
-  overlay:
-    build: .
-    depends_on:
-      - mysql
-      - platform
-    expose:
-      - "8080"
-    environment:
-      MYSQL_INIT_DB: publicchat_test
-      VIRTUAL_PORT: 8080
-      web__listen: platform
-      admin__listen: platform
-      admin__modKey: enableAdmin
-      database__default__type: mysql
-      database__default__options__database: lmpc_overlay
-      database__default__options__host: mysql
-      database__default__options__username: overlay
-      database__default__options__password: publicchat_test
-      api__url: http://platform:7070/
-      admin__url: http://platform:3000/
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.overlay.tls.certResolver=myhttpchal
-      - traefik.http.routers.overlay.rule=Host(`${DOMAIN?Variable DOMAIN not set}`) && PathPrefix(`/loki`)
-      - traefik.http.services.overlay.loadbalancer.server.port=8080
-    volumes:
-      - ./docker:/usr/src/app/docker:ro
       - ./loki.ini:/usr/src/app/loki.ini
-    entrypoint: ["./docker/wait-for-it/wait-for-it.sh", "mysql:3306", "--", "./docker/wait-for-it/wait-for-it.sh", "platform:7070", "--", "pm2-runtime", "overlay_server.js"]
+      - ./data/files:/usr/src/app/files:rw
+      - ./data/pomfdb:/usr/src/app/databases:rw
+    entrypoint: ["./docker/wait-for-it/wait-for-it.sh", "mysql:3306", "--", "./docker/wait-for-it/wait-for-it.sh", "redis:6379", "--", "pm2-runtime", "overlay_server.js"]

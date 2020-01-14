@@ -21,7 +21,7 @@ const getChallengeHandler = async (req, res) => {
 
   const passes = await logic.passesWhitelist(pubKey);
   if (!passes) {
-    console.log('get_challenge ', pubKey, 'not whitelisted');
+    console.log('get_challenge', pubKey, 'not whitelisted');
     return res.status(401).type('application/json').end(JSON.stringify({
       error: 'not allowed',
     }));

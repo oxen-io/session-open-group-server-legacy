@@ -17,15 +17,16 @@ Manual set up instructions (without attachment support) may look like:
 git submodule init
 git submodule update
 cp loki_template.ini loki.ini
-# edit loki.ini
+# edit loki.ini (set your first moderator key)
+# could edit config.json if you wanted but most people don't need to touch it
 npm i -g pm2
 npm i
-pm2 start overlay_server.js --watch --name "overlay"
-cd server
+cd nodepomf
 npm i
-cp config.sample.json config.json
-# edit config.json
-pm2 start app.js --watch --name "platform"
+cd ../server
+npm i
+cd ..
+pm2 start overlay_server.js --watch --name "lmps"
 ```
 
 # Popular linux distribution instructions to install NodeJS

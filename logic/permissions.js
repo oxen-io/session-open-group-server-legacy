@@ -113,7 +113,7 @@ module.exports = {
   getModeratorsByChannelId: async (channelId, cb) => {
     let mods = await storage.getModeratorsByChannelId(channelId);
     const configMods = await config.getConfigGlobals();
-    mods = [...mods, configMods];
+    mods = [...mods, ...configMods];
     return mods;
   },
   addGlobalModerator: async userid => {

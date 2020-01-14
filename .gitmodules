@@ -1,9 +1,9 @@
 [submodule "server"]
 	path = server
 	url = https://gitgud.io/Sapphire/Tavrn/sapphire-platform-server.git
-#[submodule "nodepomf"]
-#	path = nodepomf
-#	url = https://github.com/odilitime/nodepomf.git
 [submodule "docker/wait-for-it"]
 	path = docker/wait-for-it
 	url = https://github.com/vishnubob/wait-for-it.git
+[submodule "nodepomf"]
+	path = nodepomf
+	url = https://github.com/odilitime/nodepomf.git
