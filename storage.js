@@ -45,8 +45,15 @@ const memoryUpdate = (model, filter, data, callback) => {
 
 function start(config) {
   // schema backend type
-  const schemaType = process.env.database__default__type || 'memory';
-  const options = {};
+  const schemaType = process.env.database__default__type || config && config.database && config.database.type ||'memory';
+  //console.log('storage config', config)
+  const options = {
+    host: config && config.database && config.database.host || 'localhost',
+    database: config && config.database && config.database.database || 'lmpc_overlay',
+    username: config && config.database && config.database.username || 'overlay',
+    password: config && config.database && config.database.password || 'publicchat_test',
+  };
+  //console.log('options', options)
   if (process.env.database__default__options__host) {
     options.host = process.env.database__default__options__host;
   }
