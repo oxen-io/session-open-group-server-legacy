@@ -161,9 +161,10 @@ const deleteMultipleHandler = (req, res) => {
     const datas = [];
     await Promise.all(messages.map(async (msg) => {
       // check our permission
-      if (!msg || !msg.user) {
+      // msg will be the db format
+      if (!msg || !msg.userid) {
         // not even on the list
-        console.warn('no message or user object', msg);
+        console.warn('no message or user object', JSON.stringify(msg));
         const resObj={
           meta: {
             code: 500,
@@ -174,9 +175,9 @@ const deleteMultipleHandler = (req, res) => {
         datas.push(msg);
         return;
       }
-      if (msg.user.id !== usertoken.userid) {
+      if (msg.userid !== usertoken.userid) {
         // not even on the list
-        console.warn('user', usertoken.userid, 'tried to delete users', msg.user.id, 'message', msg.id);
+        console.warn('user', usertoken.userid, 'tried to delete users', msg.userid, 'message', msg.id);
         const resObj={
           meta: {
             code: 403,
@@ -201,6 +202,7 @@ const deleteMultipleHandler = (req, res) => {
       },
       data: datas
     };
+    console.log('final', resObj.data)
     dialect.sendResponse(resObj, res);
   });
 };

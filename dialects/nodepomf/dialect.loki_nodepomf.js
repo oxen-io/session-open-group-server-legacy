@@ -28,7 +28,15 @@ module.exports = (app, prefix) => {
   // I think it's better to fix messenger
   // it's just a better server ux, if it doesn't have know it's public virtual hosting names
   if (process.env.NPOMF_FILE_URL === undefined) {
+    var diskConfig = config.getDiskConfig();
+    //console.log('storage config', diskConfig.storage)
     process.env.NPOMF_FILE_URL = '/f'; // public url for downloading files
+    if (diskConfig.api && diskConfig.api.public_url) {
+      process.env.NPOMF_FILE_URL = diskConfig.api.public_url + '/f'
+    }
+    if (diskConfig.storage && diskConfig.storage.download_url) {
+      process.env.NPOMF_FILE_URL = diskConfig.storage.download_url + '/f'
+    }
   }
   //process.env.NPOMF_PORT = 4000;
   // we write uploaded fiels to ./files

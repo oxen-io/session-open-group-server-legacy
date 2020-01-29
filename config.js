@@ -1,5 +1,5 @@
-const fs        = require('fs');
-const ini       = require('loki-launcher/ini');
+const fs  = require('fs');
+const ini = require('loki-launcher/ini');
 
 let disk_config = {};
 
