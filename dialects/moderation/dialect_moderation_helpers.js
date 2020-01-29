@@ -117,6 +117,7 @@ const deleteMessage = (msg) => {
   })
 };
 
+// return messages in db format
 const getMessages = (ids) => {
   return new Promise((resolve, rej) => {
     cache.getMessage(ids, (messages, getErr) => {
