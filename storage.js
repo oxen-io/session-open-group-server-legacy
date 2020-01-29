@@ -103,6 +103,20 @@ function start(config) {
     // don't lose data
     schema.autoupdate(function() {});
   }
+
+  var dbMonitor=function () {
+    if (schemaType=='mysql') {
+      schema.client.ping(function (err) {
+        if (err) {
+          console.log('trying to reconnect to data db');
+          schema = new Schema(schemaType, options);
+        }
+      })
+    }
+  }
+  dbMonitor();
+  setInterval(dbMonitor, 60*1000);
+
 }
 
 module.exports = {};
