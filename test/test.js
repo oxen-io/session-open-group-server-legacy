@@ -21,7 +21,7 @@ console.log('test config_path', config_path);
 
 const webport = nconf.get('web:port') || 7070;
 const webbind = nconf.get('web:listen') || '127.0.0.1';
-const webclient = webbind !== '0.0.0.0' ? webhind : '127.0.0.1';
+const webclient = webbind !== '0.0.0.0' ? webbind : '127.0.0.1';
 const base_url = 'http://' + webclient + ':' + webport + '/';
 
 const overlay_bindhost = process.env.overlay__host || nconf.get('web:listen') || '127.0.0.1';
