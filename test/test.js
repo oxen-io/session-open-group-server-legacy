@@ -17,15 +17,33 @@ const disk_config = config.getDiskConfig();
 
 const config_path = path.join(__dirname, '/../config.json');
 nconf.argv().env('__').file({file: config_path});
-console.log('config_path', config_path);
+console.log('test config_path', config_path);
 
-const overlay_host = process.env.overlay__host || 'localhost';
+const webport = nconf.get('web:port') || 7070;
+const webbind = nconf.get('web:listen') || '127.0.0.1';
+const webclient = webbind !== '0.0.0.0' ? webhind : '127.0.0.1';
+const base_url = 'http://' + webclient + ':' + webport + '/';
+
+const overlay_bindhost = process.env.overlay__host || nconf.get('web:listen') || '127.0.0.1';
+console.log('overlay_bindhost', overlay_bindhost);
+const overlay_host = overlay_bindhost !== '0.0.0.0' ? overlay_bindhost : '127.0.0.1';
+console.log('overlay_host    ', overlay_host);
 const overlay_port = parseInt(disk_config.api && disk_config.api.port) || nconf.get('web:port') || 7070;
 // has to have the trailing slash
-const overlay_url = 'http://' + overlay_host + ':' + overlay_port + '/';
+const overlay_url = base_url;
 
-const platform_api_url = disk_config.api && disk_config.api.api_url || 'http://localhost:7070/';
-const platform_admin_url = disk_config.api && disk_config.api.admin_url && disk_config.api.admin_url.replace(/\/$/, '') || 'http://localhost:3000/';
+const platform_api_url = disk_config.api && disk_config.api.api_url || base_url;
+let platform_admin_url = disk_config.api && disk_config.api.admin_url && disk_config.api.admin_url.replace(/\/$/, '');
+if (!platform_admin_url) {
+  var admin_modkey=nconf.get('admin:modKey');
+  // http://localhost:3000
+  var admin_port=nconf.get('admin:port') || 3000;
+  var admin_listen=nconf.get('admin:listen') || '127.0.0.1';
+  platform_admin_url = 'http://' + admin_listen + ':' + admin_port;
+}
+console.log('base_url          ', base_url);
+console.log('platform_api_url  ', platform_api_url);
+console.log('platform_admin_url', platform_admin_url);
 
 // configure the admin interface for use
 // can be easily swapped out later
@@ -55,10 +73,15 @@ const cache = proxyAdmin
 let weStartedUnifiedServer = false;
 const ensureUnifiedServer = () => {
   return new Promise((resolve, rej) => {
-    console.log('unified port', nconf.get('web:port'));
-    lokinet.portIsFree(overlay_host, overlay_port, function(free) {
+    //const platformURL = new URL(base_url)
+    //console.log('platform port', platformURL.port)
+    console.log('unified port', webport);
+    lokinet.portIsFree(overlay_bindhost, webport, function(free) {
+      //console.log('overlay_bindhost', overlay_bindhost, 'overlay_host', overlay_host, 'free', free)
       if (free) {
-        const startPlatform = require('../overlay_server');
+        // make sure we use the same config...
+        process.env['config-file-path'] = config_path
+        const startPlatform = require('../server/app');
         weStartedUnifiedServer = true;
       } else {
         console.log('detected running overlay server testing that');
@@ -124,10 +147,27 @@ const selectModToken = async (channelId) => {
     console.warn('selectedMod', selectedMod, 'not in', modKeys.length);
     return;
   }
+  // FIXME
+  function getModTokenByUsername(username) {
+    return new Promise((resolve, reject) => {
+      cache.getAPITokenByUsername(username, function(data, err) {
+        if (err) console.error('getModTokenByUsername err', err)
+        console.log('data', data)
+        resolve(data.token)
+      });
+    });
+  }
+  const res = await getModTokenByUsername(modPubKey);
+  if (res) {
+    modToken = res
+  }
+  /*
   const res = await adminApi.serverRequest('tokens/@'+modPubKey, {});
   if (res.response && res.response.data) {
     modToken = res.response.data.token;
   }
+  */
+
   // it's async
   /*
   if (res.response && res.response.data === null) {
@@ -403,6 +443,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           method: 'DELETE',
         });
         assert.equal(401, result.statusCode);
+        // result.response.data will be undefined
       });
       it('user multi delete test', async function () {
         //let message = await get_message(messageId);
@@ -414,6 +455,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
             }
           });
           assert.equal(200, result.statusCode);
+          assert.ok(result.response.data.every(x => x.is_deleted));
         } else {
           console.log('skipping');
         }
@@ -430,6 +472,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
             }
           });
           assert.equal(200, result.statusCode);
+          assert.ok(result.response.data.every(x => x.is_deleted));
         } else {
           console.log('skipping');
         }
