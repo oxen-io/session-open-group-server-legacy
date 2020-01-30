@@ -12,7 +12,7 @@ System requirements:
 
 Check our [docs.loki.network](https://docs.loki.network/LokiServices/Messenger/public_channel_setup/) for complete instruction
 
-Manual set up instructions (without attachment support) may look like:
+Manual (non-docker) set up instructions:
 ```
 git submodule init
 git submodule update
@@ -26,7 +26,22 @@ npm i
 cd ../server
 npm i
 cd ..
-pm2 start overlay_server.js --watch --name "lmps"
+pm2 start overlay_server.js --watch --name "sogs"
+```
+
+Manual (non-docker) upgrade instruction:
+```
+git pull
+# handle any git conflicts for loki.ini / config.json
+# check loki.ini for anything you may need to update
+# check config.json for anything you may need to update
+git submodule update
+npm i
+cd nodepomf
+npm i
+cd ../server
+npm i
+pm2 restart sogs
 ```
 
 # Popular linux distribution instructions to install NodeJS
