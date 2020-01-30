@@ -147,7 +147,6 @@ const selectModToken = async (channelId) => {
       if (user && user.id) {
         await config.addTempModerator(user.id);
       }
-      await promise;
       return modToken;
     } else {
       console.warn('no moderators configured and cant addTempMod, skipping moderation tests');
