@@ -17,8 +17,8 @@ Manual set up instructions (without attachment support) may look like:
 git submodule init
 git submodule update
 cp loki_template.ini loki.ini
-# edit loki.ini (set your first moderator key)
-# could edit config.json if you wanted but most people don't need to touch it
+# edit loki.ini (set your first moderator key, public_url, database type and credentials)
+# edit config.json to set permanent storage backend database type and credentials
 npm i -g pm2
 npm i
 cd nodepomf
