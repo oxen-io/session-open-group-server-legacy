@@ -83,6 +83,7 @@ const moderatorUpdateChannel = async (req, res) => {
             // now place a normal request to the platform...
             const oldToken = platformApi.token;
             platformApi.token = token;
+            // FIXME: why aren't we using cache here?
             const result = await platformApi.serverRequest(`channels/${channelId}`, {
               method: 'PUT',
               objBody: req.body
