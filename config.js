@@ -47,7 +47,10 @@ const updateUserAccess = () => {
     console.log('overlay:::config.js - no loki.ini config file');
     return;
   }
-  console.log('config', disk_config);
+  const visualConfig = {...disk_config};
+  // don't put password in logs...
+  if (visualConfig.database) delete visualConfig.database.password;
+  console.log('config', visualConfig);
   // reset permissions to purge any deletions
   user_access = {};
   // load globals pubkeys from file and set their access level
