@@ -36,7 +36,7 @@ const platform_api_url = disk_config.api && disk_config.api.api_url || base_url;
 
 // is it set up?
 const admin_modkey=nconf.get('admin:modKey');
-const hasAdminAPI = !!admin_modkey;
+let hasAdminAPI = !!admin_modkey;
 
 let platform_admin_url = disk_config.api && disk_config.api.admin_url && disk_config.api.admin_url.replace(/\/$/, '');
 if (!platform_admin_url) {
@@ -91,6 +91,8 @@ const ensureUnifiedServer = () => {
       if (free) {
         // make sure we use the same config...
         process.env['config-file-path'] = config_path
+        process.env['admin:modKey'] = 'JustMakingSureThisIsEnabled';
+        hasAdminAPI = true;
         const startPlatform = require('../server/app');
         weStartedUnifiedServer = true;
       } else {
@@ -143,9 +145,13 @@ const selectModToken = async (channelId) => {
       modToken = await get_challenge(ourModKey, modPubKey);
       await submit_challenge(modToken, modPubKey);
       // now elevate to a moderator
-      const user = await getUserID(modPubKey)
-      if (user && user.id) {
-        await config.addTempModerator(user.id);
+      const userid = await getUserID(modPubKey);
+      // console.log('user', userid);
+      if (userid) {
+        await config.addTempModerator(userid);
+      } else {
+        console.warn('Could not look up authorized user', user);
+        return;
       }
       return modToken;
     } else {
