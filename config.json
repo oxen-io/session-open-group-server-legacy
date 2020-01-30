@@ -1,6 +1,8 @@
 {
+  "instructions": "These values can by overriden by the environment, the docker flow uses environment to set most of these",
   "pomf": {
     "provider": "nodepomf-internal",
+    "provider_url_instructions": "Make sure the port number matches [web].port",
     "provider_url": "http://127.0.0.1:7070/upload"
   },
   "web": {
@@ -32,10 +34,12 @@
   "admin": {
     "listen": "127.0.0.1",
     "port": 3000,
+    "modKey_instructions": "If modKey is not blank, the admin interface will be enabled",
     "modKey": "CHANGE_ME"
   },
   "database": {
     "default": {
+      "type_instructions": "memory driver will lose data between restarts",
       "type": "memory",
       "options": {
       }
