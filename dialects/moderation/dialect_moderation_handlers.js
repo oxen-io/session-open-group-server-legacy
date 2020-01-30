@@ -11,7 +11,13 @@ const setup = (utilties) => {
   helpers.setup(utilties);
   token_helpers.setup(utilties);
   const disk_config = config.getDiskConfig();
-  const platform_api_url = disk_config.api && disk_config.api.api_url || 'http://localhost:7070/';
+  const nconf = utilties.nconf;
+  const webport = nconf.get('web:port') || 7070;
+  const webbind = nconf.get('web:listen') || '127.0.0.1';
+  const webclient = webbind !== '0.0.0.0' ? webbind : '127.0.0.1';
+  const base_url = 'http://' + webclient + ':' + webport + '/';
+
+  const platform_api_url = disk_config.api && disk_config.api.api_url || base_url;
   platformApi = new adnServerAPI(platform_api_url);
 };
 
@@ -61,51 +67,55 @@ const moderatorUpdateChannel = async (req, res) => {
     // console.log('body', req.body)
     cache.getChannel(channelId, {} , function(channel, err) {
       if (err) console.error(err);
-      // console.log('channel', channel);
       if (channel === null) {
         return res.status(500).type('application/json').end(JSON.stringify({
           error: err,
           stub: 'channel_is_null',
         }));
       }
-      cache.getAPITokenByUsername(channel.owner.username, async function(token, err) {
-        if (err) console.error('getAPITokenByUsername err', err);
+      cache.getUser(channel.ownerid, function(user, err) {
+        if (err) console.error('moderatorUpdateChannel getUser err', err);
+        const username = user.username;
+        cache.getAPITokenByUsername(username, async function(token, err) {
+          if (err) console.error('moderatorUpdateChannel getAPITokenByUsername err', err);
 
-        const applyUpdate = async (token) => {
-          // now place a normal request to the platform...
-          const oldToken = platformApi.token;
-          platformApi.token = token;
-          const result = await platformApi.serverRequest(`channels/${channelId}`, {
-            method: 'PUT',
-            objBody: req.body
-          });
-          platformApi.token = oldToken;
-          res.status(result.statusCode).type('application/json').end(JSON.stringify(result));
-        }
+          const applyUpdate = async (token) => {
+            // now place a normal request to the platform...
+            const oldToken = platformApi.token;
+            platformApi.token = token;
+            const result = await platformApi.serverRequest(`channels/${channelId}`, {
+              method: 'PUT',
+              objBody: req.body
+            });
+            console.log('result', JSON.stringify(result));
+            platformApi.token = oldToken;
+            res.status(result.statusCode).type('application/json').end(JSON.stringify(result));
+          }
 
-        if (token !== null) {
-          return applyUpdate(token.token);
-        }
-        // we don't yet have a token for that user, so create it
-        // find an available token
-        const newToken = await token_helpers.createToken(channel.owner.username);
-        if (!newToken) {
-          console.error('cant generate token, how is this possible?');
-          return res.status(500).type('application/json').end(JSON.stringify({
-            error: err,
-            stub: 'channel_is_null',
-          }));
-        }
-        // claim token (make it work)
-        const confirmed = await token_helpers.claimToken(channel.owner.username, newToken);
-        if (!confirmed) {
-          console.error('cant confirm token');
-          return res.status(500).type('application/json').end(JSON.stringify({
-            error: err,
-            stub: 'channel_is_null',
-          }));
-        }
-        applyUpdate(newToken);
+          if (token !== null) {
+            return applyUpdate(token.token);
+          }
+          // we don't yet have a token for that user, so create it
+          // find an available token
+          const newToken = await token_helpers.createToken(username);
+          if (!newToken) {
+            console.error('cant generate token, how is this possible?');
+            return res.status(500).type('application/json').end(JSON.stringify({
+              error: err,
+              stub: 'channel_is_null',
+            }));
+          }
+          // claim token (make it work)
+          const confirmed = await token_helpers.claimToken(username, newToken);
+          if (!confirmed) {
+            console.error('cant confirm token');
+            return res.status(500).type('application/json').end(JSON.stringify({
+              error: err,
+              stub: 'channel_is_null',
+            }));
+          }
+          applyUpdate(newToken);
+        });
       });
     });
   });
