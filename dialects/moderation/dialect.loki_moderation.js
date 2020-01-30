@@ -8,6 +8,7 @@ module.exports = (app, prefix) => {
   const utilities = overlay.setup(cache, app.dispatcher);
   utilities.cache = cache;
   utilities.dispatcher = app.dispatcher;
+  utilities.nconf = app.nconf;
   handlers.setup(utilities);
 
   // get list of moderators per channel
