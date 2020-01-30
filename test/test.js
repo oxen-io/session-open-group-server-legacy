@@ -33,17 +33,27 @@ const overlay_port = parseInt(disk_config.api && disk_config.api.port) || nconf.
 const overlay_url = base_url;
 
 const platform_api_url = disk_config.api && disk_config.api.api_url || base_url;
+
+// is it set up?
+const admin_modkey=nconf.get('admin:modKey');
+const hasAdminAPI = !!admin_modkey;
+
 let platform_admin_url = disk_config.api && disk_config.api.admin_url && disk_config.api.admin_url.replace(/\/$/, '');
 if (!platform_admin_url) {
-  var admin_modkey=nconf.get('admin:modKey');
   // http://localhost:3000
   var admin_port=nconf.get('admin:port') || 3000;
   var admin_listen=nconf.get('admin:listen') || '127.0.0.1';
-  platform_admin_url = 'http://' + admin_listen + ':' + admin_port;
+  platform_admin_url = 'http://' + admin_listen + ':' + admin_port + '/';
 }
-console.log('base_url          ', base_url);
+//console.log('env/config.json   ', base_url); // platform
+//console.log('loki.ini          ', platform_api_url); // platform
+//console.log('overlay_url       ', overlay_url); // copied from base_url...
 console.log('platform_api_url  ', platform_api_url);
-console.log('platform_admin_url', platform_admin_url);
+//console.log('platform_admin_url', platform_admin_url);
+
+// This may require the admin interface to be configure, hrm...
+// do we really need that for unit tests?
+// well if we're not starting the server, cache would have to be proxied...
 
 // configure the admin interface for use
 // can be easily swapped out later
@@ -93,12 +103,21 @@ const ensureUnifiedServer = () => {
 
 const overlayApi  = new adnServerAPI(overlay_url);
 const platformApi = new adnServerAPI(platform_api_url);
-const adminApi    = new adnServerAPI(platform_admin_url, disk_config.api && disk_config.api.modKey || '123abc');
+// probably should never be used...
+// const adminApi    = new adnServerAPI(platform_admin_url, disk_config.api && disk_config.api.modKey || '123abc');
 
 let modPubKey = '';
 
 // grab a mod from ini
 const selectModToken = async (channelId) => {
+  if (process.env.mod_token) {
+    // assuming it's valid
+    return process.env.mod_token;
+  }
+  if (disk_config.test.mod_token) {
+    // assuming it's valid
+    return disk_config.test.mod_token;
+  }
   //console.log('selectModToken for', channelId);
   const modRes = await overlayApi.serverRequest(`loki/v1/channel/${channelId}/get_moderators`);
   //console.log('modRes', modRes);
@@ -124,21 +143,20 @@ const selectModToken = async (channelId) => {
       modToken = await get_challenge(ourModKey, modPubKey);
       await submit_challenge(modToken, modPubKey);
       // now elevate to a moderator
-      var promise = new Promise( (resolve,rej) => {
-        cache.getUserID(modPubKey, async (user, err) => {
-          if (err) console.error('getUserID err', err, user);
-          if (user && user.id) {
-            await config.addTempModerator(user.id);
-          }
-          resolve();
-        });
-      });
+      const user = await getUserID(modPubKey)
+      if (user && user.id) {
+        await config.addTempModerator(user.id);
+      }
       await promise;
       return modToken;
     } else {
       console.warn('no moderators configured and cant addTempMod, skipping moderation tests');
       return;
     }
+  }
+  if (!hasAdminAPI) {
+    console.log('Admin API is not enabled, so we can\'t run moderator tests without a key');
+    return;
   }
   const selectedMod = Math.floor(Math.random() * modKeys.length);
   modPubKey = modKeys[selectedMod];
@@ -150,16 +168,17 @@ const selectModToken = async (channelId) => {
   // FIXME
   function getModTokenByUsername(username) {
     return new Promise((resolve, reject) => {
+      // not available without proxy-admin...
       cache.getAPITokenByUsername(username, function(data, err) {
-        if (err) console.error('getModTokenByUsername err', err)
-        console.log('data', data)
-        resolve(data.token)
+        if (err) console.error('getModTokenByUsername err', err);
+        //console.log('data', data)
+        resolve(data.token);
       });
     });
   }
   const res = await getModTokenByUsername(modPubKey);
   if (res) {
-    modToken = res
+    modToken = res;
   }
   /*
   const res = await adminApi.serverRequest('tokens/@'+modPubKey, {});
@@ -508,6 +527,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
             return;
           }
           // test token endpoints
+          // console.log('token', overlayApi.token);
           const result = await overlayApi.serverRequest('loki/v1/user_info');
           // console.log('mod user_info result', result)
           assert.equal(200, result.statusCode);
@@ -564,6 +584,30 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
             assert.equal(200, result.statusCode);
           } else {
             console.log('skipping modMutliDelete');
+          }
+        });
+        it('mod update channel', async function() {
+          if (modToken) {
+            const chanObj = await platformApi.serverRequest('channels/' + channelId, {
+              params: {
+                include_annotations: 1,
+              }
+            });
+            if (!chanObj.response.data) {
+              console.log('Can not safely test moderatorUpdateChannel, skipping');
+              return;
+            }
+            const result = await overlayApi.serverRequest('loki/v1/channels/' + channelId, {
+              method: 'PUT',
+              body: chanObj.data
+            });
+            // why is there two responses..
+            //console.log('result', result.response.response.data);
+            assert.equal(200, result.statusCode);
+            assert.equal(200, result.response.response.meta.code);
+            assert.equal(channelId, result.response.response.data.id);
+          } else {
+            console.log('skipping moderatorUpdateChannel');
           }
         });
       });
