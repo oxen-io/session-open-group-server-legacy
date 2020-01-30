@@ -1,7 +1,7 @@
 # Session Open Group Server
 Session Open Group Server (previously Loki messenger public chat server)
 
-an Express REST API for serving/storing open group history rooms for Session. 
+an Express REST API for serving/storing open group room history for Session. 
 
 System requirements:
 - NodeJS
