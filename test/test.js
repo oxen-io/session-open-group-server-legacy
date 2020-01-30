@@ -114,7 +114,7 @@ const selectModToken = async (channelId) => {
     // assuming it's valid
     return process.env.mod_token;
   }
-  if (disk_config.test.mod_token) {
+  if (disk_config.test && disk_config.test.mod_token) {
     // assuming it's valid
     return disk_config.test.mod_token;
   }
