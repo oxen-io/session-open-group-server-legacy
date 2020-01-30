@@ -1,7 +1,7 @@
-# loki-messenger-public-server
-Loki Messenger public chat server
+# Session Open Group Server
+Session Open Group Server (previously Loki messenger public chat server)
 
-an Express REST API for serving persistence history public chat rooms for Loki Messenger. 
+an Express REST API for serving/storing open group history rooms for Session. 
 
 System requirements:
 - NodeJS
