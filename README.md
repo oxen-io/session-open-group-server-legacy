@@ -44,7 +44,7 @@ npm i
 pm2 restart sogs
 ```
 
-# Popular linux distribution instructions to install NodeJS
+### Popular linux distribution instructions to install NodeJS
 
 Ubuntu NodeJS installation:
 
