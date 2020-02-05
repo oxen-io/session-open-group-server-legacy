@@ -11,6 +11,10 @@ module.exports = (app, prefix) => {
   utilities.nconf = app.nconf;
   handlers.setup(utilities);
 
+  // Token: User
+  app.post(prefix + '/loki/v1/channels/:channelid/messages/:id/report', handlers.reportMessageHandler);
+  app.post(prefix + '/loki/v1/channels/messages/:id/report', handlers.reportMessageHandler);
+
   // get list of moderators per channel
   // legacy
   app.get(prefix + '/loki/v1/channel/:id/get_moderators', handlers.getChannelModeratorsHandler);
@@ -18,7 +22,6 @@ module.exports = (app, prefix) => {
   app.get(prefix + '/loki/v1/channels/:id/moderators', handlers.getChannelModeratorsHandler);
 
   app.put(prefix + '/loki/v1/channels/:id', handlers.moderatorUpdateChannel);
-
 
   // get a list of deletes in a channel
   // backwards compatibility
