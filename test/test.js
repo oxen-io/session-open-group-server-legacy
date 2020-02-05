@@ -462,6 +462,15 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
         messageId4 = await create_message(channelId);
         messageId5 = await create_message(channelId);
       });
+
+      it('user can report message', async function() {
+        const result = await overlayApi.serverRequest(`loki/v1/channels/messages/${messageId}/report`, {
+          method: 'POST',
+        });
+        assert.equal(200, result.statusCode);
+        // result.response.data will be []
+      });
+
       it('user cant mod delete message', async function() {
         const result = await overlayApi.serverRequest(`loki/v1/moderation/message/${messageId}`, {
           method: 'DELETE',
