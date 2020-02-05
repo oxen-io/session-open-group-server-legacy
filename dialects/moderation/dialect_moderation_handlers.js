@@ -358,6 +358,16 @@ const unblacklistUserFromServerHandler = async (req, res) => {
   });
 }
 
+const reportMessageHandler = async (req, res) => {
+  const resObj = {
+    meta: {
+      code: 200
+    },
+    data: []
+  }
+  dialect.sendResponse(resObj, res);
+}
+
 module.exports = {
   setup,
   getChannelModeratorsHandler,
@@ -370,4 +380,5 @@ module.exports = {
   removeGlobalModerator,
   blacklistUserFromServerHandler,
   unblacklistUserFromServerHandler,
+  reportMessageHandler,
 };
