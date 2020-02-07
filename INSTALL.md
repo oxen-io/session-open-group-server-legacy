@@ -55,6 +55,7 @@ Replace `your@email.tld` with your email address and `yourssl.domain.tld` with y
 - make sure you're in the `loki-messenger-public-server` directory
 - `EMAIL=your@email.tld DOMAIN=yourssl.domain.tld docker-compose down` to stop it from running
 - `git pull` to grab the latest source and configs
-- `git submodule update` to grab any platform changes
+- `git submodule init` to grab any submodule changes
+- `git submodule update` to grab any platform/nodepomf changes
 - `EMAIL=your@email.tld DOMAIN=yourssl.domain.tld docker-compose build` to update the local docker images
 - `EMAIL=your@email.tld DOMAIN=yourssl.domain.tld docker-compose up -d` to restart the server
