@@ -34,10 +34,10 @@ or https://docs.docker.com/v17.12/install/linux/docker-ce/ubuntu/
 ### make sure it's executable
 `chmod u+x /usr/local/bin/docker-compose`
 
-## 3. Install LMPCS
-- `git clone https://github.com/neuroscr/loki-messenger-public-server.git`
-### install LMPCS git submodules
-- `cd loki-messenger-public-server`
+## 3. Install SOGS
+- `git clone https://github.com/loki-project/session-open-group-server.git`
+### install SOGS git submodules
+- `cd session-open-group-server`
 - `git submodule init`
 - `git submodule update`
 ### make sure permissions on acme.json is correct
