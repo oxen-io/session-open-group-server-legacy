@@ -1,0 +1,62 @@
+version: '3.1'
+services:
+  mysql:
+    image: "mysql:5.7"
+    command: mysqld --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    restart: always
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "true"
+    expose:
+      - "3306"
+    volumes:
+      - ./docker:/docker-entrypoint-initdb.d:ro
+      - ./data/mysql:/var/lib/mysql:rw
+
+  redis:
+    image: redis
+    healthcheck:
+      test: ["CMD", "redis-cli","ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  unified:
+    build: .
+    depends_on:
+      - mysql
+      - redis
+    ports:
+      - ${PORT?Variable PORT not set}:7070
+    expose:
+      - "3000"
+    environment:
+      stream__host: redis
+      web__listen: 0.0.0.0
+      # web__port:  ${PORT?Variable PORT not set}
+      web__port: 7070
+      admin__listen: unified
+      admin__modKey: enableAdmin
+      database__default__type: mysql
+      database__default__options__database: lmpc_platform
+      database__default__options__host: mysql
+      database__default__options__username: platform
+      database__default__options__password: publicchat_test
+      database__overlay__options__username: overlay
+      database__overlay__options__password: publicchat_test
+      database__overlay__options__database: lmpc_overlay
+      #pomf__provider: "nodepomf"
+      pomf__provider_url: "http://127.0.0.1:7070/upload"
+      # these are defaults...
+      #NPOMF_DB_FILENAME: ./databases/pomf_files.db
+      #NPOMF_MAX_UPLOAD_SIZE: 1000000 # 10mb
+      # if you don't set this, file uploads aren't going to work
+      # tho you can set it in the loki.ini
+      NPOMF_FILE_URL: "https://${DOMAIN?Variable DOMAIN not set}/f"
+      #api__url: http://unified:7070/
+      #admin__url: http://unified:3000/
+    volumes:
+      - ./loki.ini:/usr/src/app/loki.ini
+      - ./data/files:/usr/src/app/files:rw
+      - ./data/pomfdb:/usr/src/app/databases:rw
+      - ./docker:/usr/src/app/docker:ro
+    entrypoint: ["./docker/wait-for-it/wait-for-it.sh", "mysql:3306", "--", "./docker/wait-for-it/wait-for-it.sh", "redis:6379", "--", "pm2-runtime", "overlay_server.js"]
