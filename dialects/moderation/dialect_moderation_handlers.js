@@ -84,6 +84,8 @@ const moderatorUpdateChannel = async (req, res) => {
             const oldToken = platformApi.token;
             platformApi.token = token;
             // FIXME: why aren't we using cache here?
+            // dispatcher updateChannel: gets and then applys changes and .save()s
+            console.log('platformApi request to PUT channels/')
             const result = await platformApi.serverRequest(`channels/${channelId}`, {
               method: 'PUT',
               objBody: req.body
@@ -296,6 +298,7 @@ const removeGlobalModerator = (req, res) => {
   });
 };
 
+// FIXME: normalize users refactor
 const blacklistUserFromServerHandler = async (req, res) => {
   if (!req.params.id) {
     res.status(422).type('application/json').end(JSON.stringify({
@@ -304,11 +307,11 @@ const blacklistUserFromServerHandler = async (req, res) => {
     return;
   }
   helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
-    let user = req.params.id;
-    if (user[0] == '@') {
-      const userAdnObjects = await helpers.getUsers([user]);
+    let userid = req.params.id;
+    if (userid[0] == '@') {
+      const userAdnObjects = await helpers.getUsers([userid]);
       if (userAdnObjects.length == 1) {
-        user = userAdnObjects[0].id;
+        userid = userAdnObjects[0].id;
       } else {
         res.status(410).type('application/json').end(JSON.stringify({
           error: 'user id not found',
@@ -316,7 +319,7 @@ const blacklistUserFromServerHandler = async (req, res) => {
         return;
       }
     }
-    const result = await logic.blacklistUserFromServer(user);
+    const result = await logic.blacklistUserFromServer(userid);
     const resObj = {
       meta: {
         code: 200
@@ -335,11 +338,11 @@ const unblacklistUserFromServerHandler = async (req, res) => {
     return;
   }
   helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
-    let user = req.params.id;
-    if (user[0] == '@') {
-      const userAdnObjects = await helpers.getUsers([user]);
+    let userid = req.params.id;
+    if (userid[0] == '@') {
+      const userAdnObjects = await helpers.getUsers([userid]);
       if (userAdnObjects.length == 1) {
-        user = userAdnObjects[0].id;
+        userid = userAdnObjects[0].id;
       } else {
         res.status(410).type('application/json').end(JSON.stringify({
           error: 'user id not found',
@@ -347,7 +350,92 @@ const unblacklistUserFromServerHandler = async (req, res) => {
         return;
       }
     }
-    const result = await logic.unblacklistUserFromServer(user);
+    const result = await logic.unblacklistUserFromServer(userid);
+    const resObj = {
+      meta: {
+        code: 200
+      },
+      data: []
+    }
+    dialect.sendResponse(resObj, res);
+  });
+}
+
+const whitelistUserForServerHandler = async (req, res) => {
+  if (!req.params.id) {
+    res.status(422).type('application/json').end(JSON.stringify({
+      error: 'user id missing',
+    }));
+    return;
+  }
+  helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
+    let userid = req.params.id;
+
+    const processUserId = async (userid) => {
+      const result = await logic.whitelistUserForServer(userid);
+      const resObj = {
+        meta: {
+          code: 200
+        },
+        data: []
+      }
+      dialect.sendResponse(resObj, res);
+    }
+
+    if (userid[0] == '@') {
+      const userAdnObjects = await helpers.getUsers([userid]);
+      console.log('whitelistUserForServerHandler userAdnObjects', userAdnObjects, 'for', userid);
+      if (userAdnObjects.length == 1) {
+        userid = userAdnObjects[0].id;
+      } else {
+        if (userAdnObjects.length == 0) {
+          // if we're in whitelist mode
+          const disk_config = config.getDiskConfig();
+          if (disk_config.whitelist) {
+            // the user isn't created yet and you can't create it
+            cache.addUser(userid.substring(1), '', (newUser, err2) => {
+              if (err2) {
+                console.error('addUser err', err2);
+                return res.status(500).type('application/json').end(JSON.stringify({
+                  error: 'addUser ' + err2,
+                }));
+              }
+              processUserId(newUser.id);
+            });
+            return;
+          }
+        }
+        res.status(410).type('application/json').end(JSON.stringify({
+          error: 'user id not found',
+        }));
+        return;
+      }
+    }
+    processUserId(userid);
+  });
+}
+
+const unwhitelistUserFromServerHandler = async (req, res) => {
+  if (!req.params.id) {
+    res.status(422).type('application/json').end(JSON.stringify({
+      error: 'user id missing',
+    }));
+    return;
+  }
+  helpers.validGlobal(req.token, res, async (usertoken, access_list) => {
+    let userid = req.params.id;
+    if (userid[0] == '@') {
+      const userAdnObjects = await helpers.getUsers([userid]);
+      if (userAdnObjects.length == 1) {
+        userid = userAdnObjects[0].id;
+      } else {
+        res.status(410).type('application/json').end(JSON.stringify({
+          error: 'user id not found',
+        }));
+        return;
+      }
+    }
+    const result = await logic.unwhitelistUserFromServer(userid);
     const resObj = {
       meta: {
         code: 200
@@ -380,5 +468,7 @@ module.exports = {
   removeGlobalModerator,
   blacklistUserFromServerHandler,
   unblacklistUserFromServerHandler,
+  whitelistUserForServerHandler,
+  unwhitelistUserFromServerHandler,
   reportMessageHandler,
 };
