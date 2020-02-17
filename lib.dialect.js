@@ -26,9 +26,12 @@ function sendResponse(json, resp) {
 
 function validUser(token, res, cb) {
   return new Promise(function(resolve, rej) {
+    if (!token) {
+      return resolve(false);
+    }
     dispatcher.getUserClientByToken(token, (usertoken, err) => {
       if (err) {
-        console.error('token err', err);
+        console.error('validUser token', token, 'err', err);
         const resObj={
           meta: {
             code: 500,
