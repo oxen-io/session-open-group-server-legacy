@@ -10,11 +10,6 @@ module.exports = {
   // maybe only needed in dialog_token
   passesWhitelist: async (pubKey) => {
     const disk_config = config.getDiskConfig();
-    // if we have a whitelist
-    if (disk_config.whitelist && !disk_config.whitelist[pubKey]) {
-      // and you're not on it
-      return false;
-    }
 
     // take an id return a user object
     const getUserByUsernamePromise = pubKey => {
@@ -26,12 +21,52 @@ module.exports = {
       });
     }
 
+    // handle whitelist mode
+    if (disk_config.whitelist) {
+      // in whitelist mode
+      if (disk_config.whitelist[pubKey]) {
+        return true;
+      }
+      // check whitelist db
+      const user = await getUserByUsernamePromise(pubKey);
+      if (user !== null) {
+        if (await storage.isWhitelisted(user.id)) {
+          return true;
+        }
+      }
+      // by default everyone is not allowed
+      return false;
+    }
+    // in blacklist mode
+
     const user = await getUserByUsernamePromise(pubKey);
     if (user !== null) {
       const alreadyBlacklisted = await storage.isBlacklisted(user.id);
       if (alreadyBlacklisted) {
         return false;
       }
+    }
+    // by default everyone is allowed
+    return true;
+  },
+  passesWhitelistByUserID: async (userid) => {
+    const disk_config = config.getDiskConfig();
+    if (disk_config.whitelist) {
+      if (config.whitelistAllow(userid)) {
+        // if there's a whitelist, you're not on it
+        return true;
+      }
+      // check db
+      if (await storage.isWhitelisted(userid)) {
+        return true;
+      }
+      // by default everyone is not allowed
+      return false;
+    }
+
+    // blacklist mode
+    if (await storage.isBlacklisted(userid)) {
+      return false;
     }
     // by default everyone is allowed
     return true;
@@ -191,6 +226,45 @@ module.exports = {
     const result = await storage.unblacklistUserFromServer(userid);
     if (!result) {
       console.warn('logic:::permissions::unblacklistUserFromServer - failed to blacklist');
+      return false;
+    }
+  },
+  whitelistUserForServer: async userid => {
+    if (userid === undefined) {
+      console.error('logic::permission:whitelistUserForServer -  given a user_id that is undefined');
+      return false;
+    }
+    if (config.whitelistAllow(userid)) {
+      // no whitelist or already on it
+      console.warn('logic:::permissions::whitelistUserForServer - ', userid, 'already whitelisted');
+      return false;
+    }
+    const alreadyWhitelisted = await storage.isWhitelisted(userid);
+    if (alreadyWhitelisted) {
+      console.warn('logic:::permissions::whitelistUserForServer - ', userid, 'already whitelisted');
+      return true;
+    }
+    // mark the database as such, so they can't get any new tokens
+    const result = await storage.whitelistUserForServer(userid);
+    if (!result) {
+      console.warn('logic:::permissions::whitelistUserFromServer - failed to whitelist', result);
+      return false;
+    }
+  },
+  unwhitelistUserFromServer: async userid => {
+    if (userid === undefined) {
+      console.error('logic::permission:unwhitelistUserFromServer -  given a user_id that is undefined');
+      return false;
+    }
+    const alreadyWhitelisted = await storage.isWhitelisted(userid);
+    if (!alreadyWhitelisted) {
+      console.warn('logic:::permissions::unwhitelistUserFromServer - ', userid, 'is not whitelisted');
+      return true;
+    }
+    // mark the database as such, so they can get new tokens
+    const result = await storage.unwhitelistUserFromServer(userid);
+    if (!result) {
+      console.warn('logic:::permissions::unwhitelistUserFromServer - failed to whitelist');
       return false;
     }
   }
