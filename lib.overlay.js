@@ -32,9 +32,37 @@ const setup = (cache, dispatcher) => {
   }
   if (!preflight) {
     preflight = true
-    dataAccess.getChannel(1, {}, (chnl, err, meta) => {
+    dataAccess.getChannel(1, {}, async (chnl, err, meta) => {
       if (err) console.error('channel 1 get err', err);
       if (chnl && chnl.id) {
+        const configWhitelistEnabled = !!disk_config.whitelist;
+        // do read permissions match?
+        // write shouldn't matter, if you can't get a token/user, you can't write
+        const channelWhitelistEnabled = chnl.reader !== 0;
+        console.log('configWhitelistEnabled', configWhitelistEnabled);
+        console.log('channelWhitelistEnabled', channelWhitelistEnabled);
+        if (configWhitelistEnabled != channelWhitelistEnabled) {
+          console.log('Need to fix up channel permissions');
+          // this will disable public reading of the channel
+
+          // would this work with proxy-admin system?
+          // 0 = public, 1 = any user (has token)
+          dataAccess.updateChannel(1, { reader: configWhitelistEnabled ? 1 : 0 }, function(channel, err) {
+            if (err) console.error('overlay updateChannel err', err);
+            else console.log('updated channel permissions', channel);
+          });
+        }
+        if (configWhitelistEnabled) {
+          // just make sure our owner is whitelisted for proxy mod actions
+          console.log('checking', chnl.ownerid);
+          if (chnl.ownerid) {
+            const alreadyWhitelisted = await storage.isWhitelisted(chnl.ownerid);
+            if (!alreadyWhitelisted) {
+              console.log('whitelisting channel owner, userid:', chnl.ownerid);
+              logic.whitelistUserForServer(chnl.ownerid);
+            }
+          }
+        }
         return;
       }
       console.log('need to create channel 1!');
@@ -89,6 +117,20 @@ const setup = (cache, dispatcher) => {
   return { storage, logic, config, dialect, cache };
 }
 
+const getUserAccess = async (userid) => {
+  const globMod = await storage.isGlobalModerator(userid);
+  if (globMod) return true;
+  // just get a list a channels I'm a mod for...
+  const channels = await storage.getChannelModerator(userid);
+  if (channels.length) {
+    return channels.join(',');
+  }
+  // finally check local disk config
+  const configVal = config.globalAllow(userid);
+  return configVal ? configVal : false;
+}
+
 module.exports = {
-  setup
+  setup,
+  getUserAccess
 };
