@@ -45,6 +45,10 @@ module.exports = (app, prefix) => {
         req.path === '/loki/v1/submit_challenge') {
       return next();
     }
+    // allow access to pomf files...
+    if (req.path.match(/^\/f\//)) {
+      return next();
+    }
     // disable posts system completely
     if (req.path.match(/^\/posts/i)) {
       console.log('loki control posts request?', req.path);
