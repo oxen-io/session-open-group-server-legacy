@@ -10,6 +10,7 @@ const allowedEndpoints = {
   ],
   post: [
     '/channels/1/messages',
+    '/channels/1/subscribe',
   ],
   put: [
     '/users/me',
@@ -19,6 +20,7 @@ const allowedEndpoints = {
     '/users/me'
   ],
   delete: [
+    '/channels/1/subscribe',
   ],
 }
 
