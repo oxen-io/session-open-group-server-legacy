@@ -41,6 +41,7 @@ const setup = (configObject) => {
 }
 
 let user_access = {};
+let whitelist_access = {};
 
 const updateUserAccess = () => {
   if (!updateFromDisk()) {
@@ -54,6 +55,10 @@ const updateUserAccess = () => {
   // reset permissions to purge any deletions
   user_access = {};
   // load globals pubkeys from file and set their access level
+  // if not array...
+  if (!disk_config.globals) {
+    console.log('overlay:::config.js - no globals defined in loki.ini')
+  }
   for(const pubKey in disk_config.globals) {
     const access = disk_config.globals[pubKey];
     // translate pubKey to id of user
@@ -65,6 +70,21 @@ const updateUserAccess = () => {
         console.log('global', pubKey, 'has not registered yet');
       }
     })
+  }
+
+  // optimal as long as requests outnumber number of entries...
+  if (disk_config.whitelist) {
+    whitelist_access = {};
+    for(const pubKey in disk_config.whitelist) {
+      // translate pubKey to id of user
+      cache.getUserID(pubKey, (user, err) => {
+        if (user) {
+          whitelist_access[user.id] = true;
+        } else {
+          console.log('whitelist entry', pubKey, 'has not registered yet');
+        }
+      });
+    }
   }
   // user_access will always be empty here because async
 };
@@ -86,28 +106,21 @@ const getConfigGlobals = async() => {
   return globals;
 }
 
-// FIXME: move out
-// called by validGlobal
-const getUserAccess = async (userid) => {
-  const globMod = await storage.isGlobalModerator(userid);
-  if (globMod) return true;
-  // just get a list a channels I'm a mod for...
-  const channels = await storage.getChannelModerator(userid);
-  if (channels.length) {
-    return channels.join(',');
-  }
-  // finally check local disk config
-  if (user_access[userid]) {
-    return user_access[userid];
-  }
-  return false;
+// accessors:
+const whitelistAllow = (userid) => {
+  return (!disk_config.whitelist) || whitelist_access[userid];
+}
+
+const globalAllow = (userid) => {
+  return user_access[userid];
 }
 
 module.exports = {
   setup,
   addTempModerator,
-  getUserAccess,
   getConfigGlobals,
+  whitelistAllow,
+  globalAllow,
   updateUserAccess,
   getDiskConfig: () => {
     // console.log('disk_config', disk_config);

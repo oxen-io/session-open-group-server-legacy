@@ -3,7 +3,7 @@ let config, cache, dispatcher, dialect;
 
 const setup = (utilties) => {
   // logic are also available here
-  ({ config, cache, dispatcher, dialect } = utilties);
+  ({ config, cache, dispatcher, dialect, overlay } = utilties);
 };
 
 // not currently used
@@ -36,7 +36,7 @@ const getUsers = async (userids) => {
     // handle integer lookups
     if (intList.length) {
       promises.push(new Promise( (resolve, reject) => {
-        cache.getUsers(intList, {}, (users, err) => {
+        cache.getUsers(intList, { pageParams: { count: 200 } }, (users, err) => {
           if (err) {
             return reject(err);
           }
@@ -53,7 +53,10 @@ const getUsers = async (userids) => {
           if (err) {
             return reject(err);
           }
-          results = results.concat([userObj]);
+          // don't add null
+          if (userObj) {
+            results = results.concat([userObj]);
+          }
           return resolve(results);
         });
       }));
@@ -72,7 +75,7 @@ const validGlobal = (token, res, cb) => {
       // should have already been handled by dialect.validUser
       return;
     }
-    const list = await config.getUserAccess(usertoken.userid);
+    const list = await overlay.getUserAccess(usertoken.userid);
     if (!list) {
       // not even on the list
       const resObj={

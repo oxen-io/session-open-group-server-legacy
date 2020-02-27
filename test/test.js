@@ -96,13 +96,14 @@ const ensureUnifiedServer = () => {
         const startPlatform = require('../server/app');
         weStartedUnifiedServer = true;
       } else {
-        console.log('detected running overlay server testing that');
+        console.log('detected running overlay server, testing that');
       }
       resolve();
     });
   });
 };
 
+const modApi      = new adnServerAPI(overlay_url);
 const overlayApi  = new adnServerAPI(overlay_url);
 const platformApi = new adnServerAPI(platform_api_url);
 // probably should never be used...
@@ -145,7 +146,7 @@ const selectModToken = async (channelId) => {
       modToken = await get_challenge(ourModKey, modPubKey);
       await submit_challenge(modToken, modPubKey);
       // now elevate to a moderator
-      const userid = await getUserID(modPubKey);
+      const userid = await getUserID(modPubKey, modToken);
       // console.log('user', userid);
       if (userid) {
         await config.addTempModerator(userid);
@@ -235,8 +236,9 @@ function get_challenge(ourKey, ourPubKeyHex) {
       // this can be broken into more it() if desired
       //it("returns status code 200", async () => {
       let tokenString
+      let result
       try {
-        const result = await overlayApi.serverRequest('loki/v1/get_challenge', {
+        result = await overlayApi.serverRequest('loki/v1/get_challenge', {
           params: {
            pubKey: ourPubKeyHex
           }
@@ -297,8 +299,9 @@ const submit_challenge = (tokenString, pubKey) => {
 }
 
 // requires overlayApi to be configured with a token
-function getUserID(pubKey) {
+function getUserID(pubKey, token) {
   return new Promise((resolve, rej) => {
+    if (token) cache.token = token;
     cache.getUserID(pubKey, function(user, err, meta) {
       //assert.equal(200, result.statusCode);
       resolve(user && user.id);
@@ -375,6 +378,23 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
   let tokenString, userid, mod_userid;
   describe('get our token', function() {
     it('get token', async function() {
+      if (disk_config.whitelist) {
+        console.log('Oh were in whitelist model, going to need to permit ourselves...', ourPubKeyHex);
+        const modToken = await selectModToken(channelId);
+        if (!modToken) {
+          console.log('No mod token to whitelist temporary user', ourPubKeyHex);
+          process.exit(1);
+        }
+        modApi.token = modToken;
+        const result = await modApi.serverRequest('loki/v1/moderation/whitelist/@' + ourPubKeyHex, {
+          method: 'POST',
+        });
+        console.log('Ok attempted to whitelist', ourPubKeyHex);
+        if (result.statusCode !== 200 || result.response.meta.code !== 200) {
+          console.log('Failed to whitelist temporary user', ourPubKeyHex, result);
+          process.exit(1);
+        }
+      }
       tokenString = await get_challenge(ourKey, ourPubKeyHex);
       // console.log('tokenString', tokenString);
     });
@@ -656,7 +676,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
             console.log('no mods skipping');
             return;
           }
-          const userid = await getUserID(ourPubKeyHex);
+          const userid = await getUserID(ourPubKeyHex, modToken);
           assert.ok(userid);
           const result = await overlayApi.serverRequest(`loki/v1/moderation/blacklist/@${ourPubKeyHex}`, {
             method: 'DELETE',
@@ -671,7 +691,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
             return;
           }
           //console.log('key', ourPubKeyHex);
-          const userid = await getUserID(ourPubKeyHex);
+          const userid = await getUserID(ourPubKeyHex, modToken);
           assert.ok(userid);
           //console.log('userid', userid);
           const result = await overlayApi.serverRequest(`loki/v1/moderation/blacklist/${userid}`, {
@@ -694,7 +714,11 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           //user_info();
           const result = await platformApi.serverRequest('token');
           // console.log('token for', platformApi.token, result);
-          assert.equal(401, result.statusCode);
+          if (disk_config.whitelist) {
+            assert.equal(403, result.statusCode);
+          } else {
+            assert.equal(401, result.statusCode);
+          }
         });
         it('banned token vs overlay', async function() {
           if (!modToken) {
@@ -704,7 +728,11 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           //user_info();
           const result = await overlayApi.serverRequest('loki/v1/user_info');
           // console.log('token for', platformApi.token, result);
-          assert.equal(401, result.statusCode);
+          if (disk_config.whitelist) {
+            assert.equal(403, result.statusCode);
+          } else {
+            assert.equal(401, result.statusCode);
+          }
         });
         it('try to reregister with banned token', async function() {
           // need to be able to ban it

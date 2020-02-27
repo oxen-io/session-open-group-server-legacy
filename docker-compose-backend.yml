@@ -8,8 +8,6 @@ services:
       MYSQL_RANDOM_ROOT_PASSWORD: "true"
     expose:
       - "3306"
-    labels:
-      - traefik.enable=false
     volumes:
       - ./docker:/docker-entrypoint-initdb.d:ro
       - ./data/mysql:/var/lib/mysql:rw
@@ -21,38 +19,21 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    labels:
-      - traefik.enable=false
-
-  traefik:
-    image: "traefik:v2.0.0"
-    command:
-      - --providers.docker=true
-      #- --providers.docker.exposedbydefault=false
-      - --entrypoints.http.address=:8080
-      - --accessLog
-      #- --debug=true
-      #- --retry
-      #- --api.insecure # Don't do that in production
-    ports:
-      - "8080:8080"
-      # dev hack, remove for production...
-      #- "81:8080"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - ./docker/acme.json:/acme.json
 
   unified:
     build: .
     depends_on:
       - mysql
       - redis
+    ports:
+      - ${PORT?Variable PORT not set}:7070
     expose:
-      - ${PORT?Variable PORT not set}
       - "3000"
     environment:
       stream__host: redis
-      web__listen: unified
+      web__listen: 0.0.0.0
+      # web__port:  ${PORT?Variable PORT not set}
+      web__port: 7070
       admin__listen: unified
       admin__modKey: enableAdmin
       database__default__type: mysql
@@ -64,7 +45,7 @@ services:
       database__overlay__options__password: publicchat_test
       database__overlay__options__database: lmpc_overlay
       #pomf__provider: "nodepomf"
-      #pomf__provider_url: "http://nodepomf/upload"
+      pomf__provider_url: "http://127.0.0.1:7070/upload"
       # these are defaults...
       #NPOMF_DB_FILENAME: ./databases/pomf_files.db
       #NPOMF_MAX_UPLOAD_SIZE: 1000000 # 10mb
@@ -73,15 +54,9 @@ services:
       NPOMF_FILE_URL: "https://${DOMAIN?Variable DOMAIN not set}/f"
       #api__url: http://unified:7070/
       #admin__url: http://unified:3000/
-      VIRTUAL_PORT: ${PORT?Variable PORT not set}
-      VIRTUAL_HOST: unified.local
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.platform.rule=hostregexp(`{host:.+}`)
-      - traefik.http.services.platform.loadbalancer.server.port=7070
     volumes:
-      - ./docker:/usr/src/app/docker:ro
       - ./loki.ini:/usr/src/app/loki.ini
       - ./data/files:/usr/src/app/files:rw
       - ./data/pomfdb:/usr/src/app/databases:rw
+      - ./docker:/usr/src/app/docker:ro
     entrypoint: ["./docker/wait-for-it/wait-for-it.sh", "mysql:3306", "--", "./docker/wait-for-it/wait-for-it.sh", "redis:6379", "--", "pm2-runtime", "overlay_server.js"]

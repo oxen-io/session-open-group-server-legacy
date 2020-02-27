@@ -9,6 +9,7 @@ module.exports = (app, prefix) => {
   utilities.cache = cache;
   utilities.dispatcher = app.dispatcher;
   utilities.nconf = app.nconf;
+  utilities.overlay = overlay;
   handlers.setup(utilities);
 
   // Token: User
@@ -45,5 +46,9 @@ module.exports = (app, prefix) => {
   // blacklist userid
   app.post(prefix + '/loki/v1/moderation/blacklist/:id', handlers.blacklistUserFromServerHandler);
   app.delete(prefix + '/loki/v1/moderation/blacklist/:id', handlers.unblacklistUserFromServerHandler);
+
+  // whitelist userid
+  app.post(prefix + '/loki/v1/moderation/whitelist/:id', handlers.whitelistUserForServerHandler);
+  app.delete(prefix + '/loki/v1/moderation/whitelist/:id', handlers.unwhitelistUserFromServerHandler);
 
 }

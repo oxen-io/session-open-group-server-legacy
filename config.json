@@ -11,6 +11,10 @@
     "mounts": [
       {
         "destination": "",
+        "dialect": "../dialects/control/dialect.loki_control"
+      },
+      {
+        "destination": "",
         "dialect": "appdotnet_official"
       },
       {

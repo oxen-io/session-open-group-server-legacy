@@ -5,7 +5,7 @@ const helpers = require('./dialect_tokens_helpers');
 let cache, dialect, config;
 const setup = (utilties) => {
   // config are also available here
-  ({ cache, dialect, logic, config } = utilties);
+  ({ cache, dialect, logic, config, overlay } = utilties);
   helpers.setup(utilties);
 };
 
@@ -21,7 +21,7 @@ const getChallengeHandler = async (req, res) => {
 
   const passes = await logic.passesWhitelist(pubKey);
   if (!passes) {
-    console.log('get_challenge', pubKey, 'not whitelisted');
+    console.log('getChallengeHandler', pubKey, 'not whitelisted');
     return res.status(401).type('application/json').end(JSON.stringify({
       error: 'not allowed',
     }));
@@ -50,7 +50,7 @@ const submitChallengeHandler = async (req, res) => {
 
   const passes = await logic.passesWhitelist(pubKey);
   if (!passes) {
-    console.log('submit_challenge ', pubKey, 'not whitelisted');
+    console.log('submitChallengeHandler', pubKey, 'not whitelisted');
     return res.status(401).type('application/json').end(JSON.stringify({
       error: 'not allowed',
     }));
@@ -88,9 +88,20 @@ const getTokenInfoHandler = async (req, res) => {
     // should have already been handled by dialect.validUser
     return;
   }
+
+  // deny if not on whitelist...
+  const passes = await logic.passesWhitelistByUserID(usertoken.userid);
+  if (!passes) {
+    console.log('getTokenInfoHandler', usertoken.userid, 'not whitelisted');
+    // FIXME: if token exists, we should delete it...
+    return res.status(401).type('application/json').end(JSON.stringify({
+      error: 'not allowed',
+    }));
+  }
+
   let resObj = {}
   try {
-    const modStatus = await config.getUserAccess(usertoken.userid);
+    const modStatus = await overlay.getUserAccess(usertoken.userid);
     resObj={
       meta: {
         code: 200,
