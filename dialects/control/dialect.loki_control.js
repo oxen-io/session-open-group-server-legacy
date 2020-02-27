@@ -9,6 +9,7 @@ const allowedEndpoints = {
     '/channels/1/messages',
   ],
   post: [
+    '/files',
     '/channels/1/messages',
     '/channels/1/subscribe',
   ],
@@ -47,8 +48,16 @@ module.exports = (app, prefix) => {
         req.path === '/loki/v1/submit_challenge') {
       return next();
     }
+    // you can view the homepage
+    if (req.path === '/') {
+      return next();
+    }
     // allow access to pomf files...
     if (req.path.match(/^\/f\//)) {
+      return next();
+    }
+    // allow access to pomf uploads...
+    if (req.path.match(/^\/upload/)) {
       return next();
     }
     // disable posts system completely
