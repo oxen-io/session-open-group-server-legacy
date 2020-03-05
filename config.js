@@ -21,6 +21,13 @@ const updateFromDisk = () => {
     // console.log('setting api.admin_url to', process.env.api__url, 'from environment');
     disk_config.api.admin_url = process.env.admin__url;
   }
+  if (disk_config.api && disk_config.api.public_url) {
+    // strip any trailing slashes
+    if (disk_config.api.public_url.match(/\/$/)) {
+      console.log('Your loki.ini api.public_url has a trailing slash! Do not do that!');
+      disk_config.api.public_url = disk_config.api.public_url.replace(/\/$/, '');
+    }
+  }
   return true;
 }
 // make sure we have some config loaded
