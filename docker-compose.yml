@@ -76,6 +76,7 @@ services:
       database__overlay__options__database: lmpc_overlay
       #pomf__provider: "nodepomf"
       #pomf__provider_url: "http://nodepomf/upload"
+      pomf__provider_url: "http://unified:7070/upload"
       # these are defaults...
       #NPOMF_DB_FILENAME: ./databases/pomf_files.db
       #NPOMF_MAX_UPLOAD_SIZE: 1000000 # 10mb
