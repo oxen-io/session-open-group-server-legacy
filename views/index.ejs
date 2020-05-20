@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <link rel="stylesheet" type="text/css" href="css/stylesheet.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="js/qrcode.min.js"></script>
+  <% if (whitelistMode) { %>
+    <title>Session Open Group</title>
+  <% } else { %>
+    <title><%= c1_name %> - Session open group</title>
+  <% } %>
+</head>
+
+<body>
+  <section class="header">
+    <div class="logo">
+      <a href="https://getsession.org"><img src="images/sessionsitelogo.png" width="200px"></a>
+    </div>
+    <div class="message">
+      <p align="right"><font size="6">Send Messages Not Metadata.</font></p>
+    </div>
+  </section>
+
+  <section class="content">
+    <section class="banner">
+      <div class="download">
+        <center>
+          Don't have <a href="https://getsession.org/"><b>Session</b></a> yet? <a href="https://getsession.org/download">Try it now!</a>
+        </center>
+      </div>
+    </section>
+
+<% if (!whitelistMode) { %>
+    <section class="groupchannel">
+      <center>
+        <h1><%= c1_name %></h1>
+        <% if (c1_logo) { %>
+          <div class="opengrouplogo">
+            <img src="<%= c1_logo %>" width="75px">
+          </div>
+        <% } %>
+        <p><%= c1_desc %></p>
+      </center>
+    </section>
+<% } %>
+    <section class="url">
+<script>
+const onClick = evt => {
+  const link = document.querySelector('a.copyUrl');
+  const range = document.createRange();
+  range.selectNode(link);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+
+  const successful = document.execCommand('copy');
+  console.log('copied to clipboard', successful)
+  return false;
+};
+</script>
+
+      <center>
+        <div id="qrcode"></div>
+        <!-- Need to insert the url registered for the server. -->
+        <br><font size="5.5"><a class="copyUrl" onclick="return onClick();" href="<%= public_url %>"><%= public_url %></a></font>
+      </center>
+
+<script type="text/javascript">
+new QRCode(document.getElementById("qrcode"), "<%= public_url %>");
+</script>
+    </section>
+
+    <section class="howto">
+      <center>
+        <h2>How to join on:</h2>
+        <a href="https://docs.loki.network/LokiServices/Messenger/JoinOpenGroupMobile/">
+          <button class="btn" type="button">Mobile</button>
+        </a>
+        <a href="https://docs.loki.network/LokiServices/Messenger/JoinOpenGroupDesktop/">
+          <button class="btn" type="button">Desktop</button>
+        </a>
+      </center>
+    </section>
+  </section>
+
+  <section class="footer">
+    <div class ="footerwrapper">
+      <div class="about">
+        <h3>About</h3>
+        <a href="https://getsession.org">Session</a><br>
+        <a href="https://getsession.org/wp-content/uploads/2020/02/Session-Whitepaper.pdf">Whitepaper</a><br>
+        <a href="https://getsession.org/blog/">Blog</a><br>
+        <a href="https://getsession.org/faq/">FAQ</a><br>
+      </div>
+      <div class="company">
+        <h3>Company</h3>
+        <a href="https://loki.foundation/">Loki Foundation</a><br>
+        <a href="https://loki.network/">Loki Network</a><br>
+        <a href="https://lokinet.org/">Lokinet</a><br>
+        <a href="https://coinstop.io">Merch</a><br>
+        <a href="https://getsession.org/contact-us/">Contact us</a><br>
+      </div>
+      <div class="socials">
+        <h3>Socials</h3>
+        <a href="https://www.facebook.com/SessionMessenger/">Facebook</a><br>
+        <a href="https://twitter.com/session_app">Twitter</a><br>
+        <a href="https://github.com/Loki-project">Github</a><br>
+      </div>
+    </div>
+  </section>
+
+</body>
+</html>
