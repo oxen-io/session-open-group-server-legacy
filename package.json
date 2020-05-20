@@ -1,12 +1,13 @@
 {
-  "name": "public-server-overlay",
+  "name": "session-open-group-server",
   "version": "1.0.0",
-  "description": "Loki Messenger Public Chat Server",
+  "description": "Session Open Group Server",
   "main": "app.js",
   "dependencies": {
     "body-parser": "^1.19.0",
     "bytebuffer": "^5.0.1",
     "caminte": "^0.4.1",
+    "ejs": "^3.1.3",
     "express": "^4.17.1",
     "libsignal": "^2.0.1",
     "loki-launcher": "^1.0.0",
@@ -22,12 +23,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/BeaudanBrown/publicserver.git"
+    "url": "git+https://github.com/loki-project/session-open-group-server.git"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/BeaudanBrown/publicserver/issues"
+    "url": "https://github.com/loki-project/session-open-group-server"
   },
-  "homepage": "https://github.com/BeaudanBrown/publicserver#readme"
+  "homepage": "https://github.com/loki-project/session-open-group-server#readme"
 }
