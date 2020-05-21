@@ -32,6 +32,10 @@
       {
         "destination": "",
         "dialect": "../dialects/nodepomf/dialect.loki_nodepomf"
+      },
+      {
+        "destination": "",
+        "dialect": "../dialects/homepage/dialect.loki_homepage"
       }
     ]
   },

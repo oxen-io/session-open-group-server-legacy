@@ -96,6 +96,10 @@ const updateUserAccess = () => {
   // user_access will always be empty here because async
 };
 
+const inWhiteListMode = () => {
+  return !!(disk_config.whitelist && Object.keys(disk_config.whitelist));
+}
+
 // FIXME: move out
 const addTempModerator = async (userid) => {
   console.log('Temporarily upgrading', userid, 'to global moderator');
@@ -129,6 +133,7 @@ module.exports = {
   whitelistAllow,
   globalAllow,
   updateUserAccess,
+  inWhiteListMode,
   getDiskConfig: () => {
     // console.log('disk_config', disk_config);
     return disk_config
