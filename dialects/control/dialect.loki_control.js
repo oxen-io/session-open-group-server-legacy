@@ -60,6 +60,16 @@ module.exports = (app, prefix) => {
     if (req.path.match(/^\/upload/)) {
       return next();
     }
+    // allow access to public files...
+    if (req.path.match(/^\/css\//)) {
+      return next();
+    }
+    if (req.path.match(/^\/images\//)) {
+      return next();
+    }
+    if (req.path.match(/^\/js\//)) {
+      return next();
+    }
     // disable posts system completely
     if (req.path.match(/^\/posts/i)) {
       console.log('loki control posts request?', req.path);
