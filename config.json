@@ -23,6 +23,10 @@
       },
       {
         "destination": "",
+        "dialect": "../dialects/transport/dialect.loki_proxy"
+      },
+      {
+        "destination": "",
         "dialect": "../dialects/token/dialect.loki_tokens"
       },
       {
