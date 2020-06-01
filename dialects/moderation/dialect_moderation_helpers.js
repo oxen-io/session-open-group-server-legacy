@@ -29,7 +29,8 @@ const getUsers = async (userids) => {
     // partition next200
     const [intList, userList] = next200.reduce((result, user) => {
       const isUsername = user[0] === '@';
-      result[isUsername ? 1 : 0].push(isUsername ? user.substr(1) : user)
+      // ints have to be js ints (not '3' strings) for the memory driver
+      result[isUsername ? 1 : 0].push(isUsername ? user.substr(1) : parseInt(user))
       return result
     }, [[], []]);
 
