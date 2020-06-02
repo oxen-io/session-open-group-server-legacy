@@ -23,22 +23,24 @@ const webport = nconf.get('web:port') || 7070;
 const webbind = nconf.get('web:listen') || '127.0.0.1';
 const webclient = webbind !== '0.0.0.0' ? webbind : '127.0.0.1';
 const base_url = 'http://' + webclient + ':' + webport + '/';
+console.log('webport', webport)
 
-const overlay_bindhost = process.env.overlay__host || nconf.get('web:listen') || '127.0.0.1';
-console.log('overlay_bindhost', overlay_bindhost);
-const overlay_host = overlay_bindhost !== '0.0.0.0' ? overlay_bindhost : '127.0.0.1';
-console.log('overlay_host    ', overlay_host);
-const overlay_port = parseInt(disk_config.api && disk_config.api.port) || nconf.get('web:port') || 7070;
-// has to have the trailing slash
-const overlay_url = base_url;
-
+/*
+// This may require the admin interface to be configure, hrm...
+// do we really need that for unit tests?
+// well if we're not starting the server, cache would have to be proxied...
 const platform_api_url = disk_config.api && disk_config.api.api_url || base_url;
+const platform_admin_url = disk_config.api && disk_config.api.admin_url && disk_config.api.admin_url.replace(/\/$/, '') || 'http://localhost:3000/';
+*/
+
+// we no longer support non-unified: disk_config.api.api_url
+const platform_api_url = base_url;
 
 // is it set up?
-const admin_modkey=nconf.get('admin:modKey');
+const admin_modkey = nconf.get('admin:modKey');
 let hasAdminAPI = !!admin_modkey;
 
-let platform_admin_url = disk_config.api && disk_config.api.admin_url && disk_config.api.admin_url.replace(/\/$/, '');
+let platform_admin_url;
 if (!platform_admin_url) {
   // http://localhost:3000
   var admin_port=nconf.get('admin:port') || 3000;
@@ -47,13 +49,9 @@ if (!platform_admin_url) {
 }
 //console.log('env/config.json   ', base_url); // platform
 //console.log('loki.ini          ', platform_api_url); // platform
-//console.log('overlay_url       ', overlay_url); // copied from base_url...
 console.log('platform_api_url  ', platform_api_url);
 //console.log('platform_admin_url', platform_admin_url);
 
-// This may require the admin interface to be configure, hrm...
-// do we really need that for unit tests?
-// well if we're not starting the server, cache would have to be proxied...
 
 // configure the admin interface for use
 // can be easily swapped out later
@@ -81,19 +79,19 @@ if (proxyAdmin.adminroot.replace) {
 const cache = proxyAdmin
 
 let weStartedUnifiedServer = false;
+let startPlatform
 const ensureUnifiedServer = () => {
   return new Promise((resolve, rej) => {
-    //const platformURL = new URL(base_url)
     //console.log('platform port', platformURL.port)
     console.log('unified port', webport);
-    lokinet.portIsFree(overlay_bindhost, webport, function(free) {
-      //console.log('overlay_bindhost', overlay_bindhost, 'overlay_host', overlay_host, 'free', free)
+    lokinet.portIsFree(webbind, webport, function(free) {
+      //console.log(webbind + ':' + webport, 'free', free);
       if (free) {
         // make sure we use the same config...
         process.env['config-file-path'] = config_path
         process.env['admin:modKey'] = 'JustMakingSureThisIsEnabled';
         hasAdminAPI = true;
-        const startPlatform = require('../server/app');
+        startPlatform = require('../server/app');
         weStartedUnifiedServer = true;
       } else {
         console.log('detected running overlay server, testing that');
@@ -103,11 +101,13 @@ const ensureUnifiedServer = () => {
   });
 };
 
-const modApi      = new adnServerAPI(overlay_url);
-const overlayApi  = new adnServerAPI(overlay_url);
+const modApi      = new adnServerAPI(platform_admin_url);
+const overlayApi  = new adnServerAPI(platform_api_url);
 const platformApi = new adnServerAPI(platform_api_url);
 // probably should never be used...
 // const adminApi    = new adnServerAPI(platform_admin_url, disk_config.api && disk_config.api.modKey || '123abc');
+// modApi?
+const adminApi    = new adnServerAPI(platform_admin_url, disk_config.api && disk_config.api.modKey || '123abc');
 
 let modPubKey = '';
 
@@ -143,8 +143,11 @@ const selectModToken = async (channelId) => {
       // encode server's pubKey in base64
       const ourModPubKey64 = bb.wrap(ourModKey.pubKey).toString('base64');
       const modPubKey = bb.wrap(ourModKey.pubKey).toString('hex');
-      modToken = await get_challenge(ourModKey, modPubKey);
-      await submit_challenge(modToken, modPubKey);
+      const lib = require('./tests/lib');
+      lib.setup(testInfo);
+      const chalResult = await lib.get_challenge(modPubKey);
+      modToken = await lib.decodeToken(ourModKey, chalResult);
+      await lib.submit_challenge(modToken, modPubKey);
       // now elevate to a moderator
       const userid = await getUserID(modPubKey, modToken);
       // console.log('user', userid);
@@ -222,80 +225,13 @@ const ourPubKey64 = bb.wrap(ourKey.pubKey).toString('base64');
 const ourPubKeyHex = bb.wrap(ourKey.pubKey).toString('hex');
 console.log('running as', ourPubKeyHex);
 
-const IV_LENGTH = 16;
-const DHDecrypt = async (symmetricKey, ivAndCiphertext) => {
-  const iv = ivAndCiphertext.slice(0, IV_LENGTH);
-  const ciphertext = ivAndCiphertext.slice(IV_LENGTH);
-  return libsignal.crypto.decrypt(symmetricKey, ciphertext, iv);
-}
-
-// globally passing overlayApi
-function get_challenge(ourKey, ourPubKeyHex) {
-  return new Promise((resolve, rej) => {
-    describe(`get challenge for ${ourPubKeyHex} /loki/v1/get_challenge`, async function() {
-      // this can be broken into more it() if desired
-      //it("returns status code 200", async () => {
-      let tokenString
-      let result
-      try {
-        result = await overlayApi.serverRequest('loki/v1/get_challenge', {
-          params: {
-           pubKey: ourPubKeyHex
-          }
-        });
-        assert.equal(200, result.statusCode);
-        const body = result.response;
-        //console.log('get challenge body', body);
-        // body.cipherText64
-        // body.serverPubKey64 // base64 encoded pubkey
-
-        // console.log('serverPubKey64', body.serverPubKey64);
-        const serverPubKeyBuff = Buffer.from(body.serverPubKey64, 'base64')
-        const serverPubKeyHex = serverPubKeyBuff.toString('hex');
-        //console.log('serverPubKeyHex', serverPubKeyHex)
-
-        const ivAndCiphertext = Buffer.from(body.cipherText64, 'base64');
-
-        const symmetricKey = libsignal.curve.calculateAgreement(
-          serverPubKeyBuff,
-          ourKey.privKey
-        );
-        const token = await DHDecrypt(symmetricKey, ivAndCiphertext);
-        tokenString = token.toString('utf8');
-      } catch (e) {
-        console.error('platformApi.serverRequest err', e, result)
-        tokenString = '';
-        return rej();
-      }
-
-      //console.log('tokenString', tokenString);
-      resolve(tokenString);
-      //});
-    });
-  });
-}
-
-const submit_challenge = (tokenString, pubKey) => {
-  // we use this promise to delay resolution
-  return new Promise((resolve, rej) => {
-    // I don't think we need or want this describe at all...
-    describe(`submit challenge for ${tokenString} /loki/v1/submit_challenge`, async function() {
-      //it("returns status code 200", async () => {
-        const result = await overlayApi.serverRequest('loki/v1/submit_challenge', {
-          method: 'POST',
-          objBody: {
-            pubKey: pubKey,
-            token: tokenString,
-          },
-          noJson: true
-        });
-        assert.equal(200, result.statusCode);
-        // body should be ''
-        //console.log('submit challenge body', body);
-        resolve();
-      //});
-    });
-  });
+let testInfo = {
+  overlayApi,
+  platformApi,
+  adminApi,
+  ourKey,
+  ourPubKeyHex,
+  disk_config
 }
 
 // requires overlayApi to be configured with a token
@@ -377,49 +313,17 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
   // get our token
   let tokenString, userid, mod_userid;
   describe('get our token', function() {
-    it('get token', async function() {
-      if (disk_config.whitelist) {
-        console.log('Oh were in whitelist model, going to need to permit ourselves...', ourPubKeyHex);
-        const modToken = await selectModToken(channelId);
-        if (!modToken) {
-          console.log('No mod token to whitelist temporary user', ourPubKeyHex);
-          process.exit(1);
-        }
-        modApi.token = modToken;
-        const result = await modApi.serverRequest('loki/v1/moderation/whitelist/@' + ourPubKeyHex, {
-          method: 'POST',
-        });
-        console.log('Ok attempted to whitelist', ourPubKeyHex);
-        if (result.statusCode !== 200 || result.response.meta.code !== 200) {
-          console.log('Failed to whitelist temporary user', ourPubKeyHex, result);
-          process.exit(1);
-        }
-      }
-      tokenString = await get_challenge(ourKey, ourPubKeyHex);
-      // console.log('tokenString', tokenString);
-    });
-    it('activate token', async function() {
-      // activate token
-      await submit_challenge(tokenString, ourPubKeyHex);
-    });
+
+    require('./tests/tokens/get_challenge.js')(testInfo);
+    require('./tests/tokens/submit_challenge.js')(testInfo);
+
     it('set token', async function() {
+      tokenString = testInfo.tokenString;
+      console.log('set token tokenString', tokenString);
       // set token
       overlayApi.token = tokenString;
       platformApi.token = tokenString;
       //userid = await getUserID(ourPubKeyHex);
-    });
-
-    it('user info (non-mod)', async function() {
-      // test token endpoints
-      const result = await overlayApi.serverRequest('loki/v1/user_info');
-      //console.log('user user_info result', result)
-      assert.equal(200, result.statusCode);
-      assert.ok(result.response);
-      assert.ok(result.response.data);
-      // we're a freshly created user (hopefully)
-      assert.ok(!result.response.data.moderator_status);
-      assert.ok(result.response.data.user_id);
-      userid = result.response.data.user_id;
     });
 
     // test moderator security...
@@ -572,7 +476,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
           // I think we only should be global here for now...
           assert.equal(true, result.response.data.moderator_status === true);
           assert.ok(result.response.data.user_id);
-          mod_userid=result.response.data.user_id;
+          mod_userid = result.response.data.user_id;
         });
         it('user cant demote moderators', async function() {
           overlayApi.token = tokenString; // switch to user
