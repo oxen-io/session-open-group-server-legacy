@@ -12,7 +12,7 @@ const setup = (utilties) => {
 const getChallengeHandler = async (req, res) => {
   const { pubKey } = req.query;
   if (!pubKey) {
-    console.log('get_challenge pubKey missing');
+    console.warn('get_challenge pubKey missing');
     res.status(422).type('application/json').end(JSON.stringify({
       error: 'PubKey missing',
     }));
@@ -21,7 +21,7 @@ const getChallengeHandler = async (req, res) => {
 
   const passes = await logic.passesWhitelist(pubKey);
   if (!passes) {
-    console.log('getChallengeHandler', pubKey, 'not whitelisted');
+    console.warn('getChallengeHandler', pubKey, 'not whitelisted');
     return res.status(401).type('application/json').end(JSON.stringify({
       error: 'not allowed',
     }));
@@ -41,7 +41,7 @@ const getChallengeHandler = async (req, res) => {
 const submitChallengeHandler = async (req, res) => {
   const { pubKey, token } = req.body;
   if (!pubKey) {
-    console.log('submit_challenge pubKey missing');
+    console.warn('submit_challenge pubKey missing');
     res.status(422).type('application/json').end(JSON.stringify({
       error: 'pubKey missing',
     }));
@@ -50,13 +50,13 @@ const submitChallengeHandler = async (req, res) => {
 
   const passes = await logic.passesWhitelist(pubKey);
   if (!passes) {
-    console.log('submitChallengeHandler', pubKey, 'not whitelisted');
+    console.warn('submitChallengeHandler', pubKey, 'not whitelisted');
     return res.status(401).type('application/json').end(JSON.stringify({
       error: 'not allowed',
     }));
   }
   if (!token) {
-    console.log('submit_challenge token missing');
+    console.warn('submit_challenge token missing', req.body);
     res.status(422).type('application/json').end(JSON.stringify({
       error: 'token missing',
     }));
