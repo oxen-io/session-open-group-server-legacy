@@ -21,7 +21,7 @@ const homePageHandler = async (req, res) => {
     var value = JSON.parse(note[0].value)
     // console.log('avatar', value.avatar)
     var whitelistMode = config.inWhiteListMode();
-    console.log('whitelistMode', whitelistMode, disk_config)
+    // console.log('whitelistMode', whitelistMode, disk_config)
     res.render('index.ejs', {
       version: version,
       public_url: disk_config.api.public_url,
