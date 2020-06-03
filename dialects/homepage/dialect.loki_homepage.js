@@ -7,7 +7,9 @@ module.exports = (app, prefix) => {
   // set cache based on dispatcher object
   cache = app.dispatcher.cache;
   const utilties = overlay.setup(cache, app.dispatcher);
+  utilties.nconf = app.nconf;
   handlers.setup(utilties);
+
   const { storage, logic, config, dialect } = utilties;
 
   app.use('/images', express.static('public/images') );
