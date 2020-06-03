@@ -4,7 +4,7 @@
 // best we have a single entry point for all our common dialect to reduce set up in them
 
 const storage = require('./storage');
-const config  = require('./config');
+const config  = require('./lib.config');
 const logic   = require('./logic');
 const dialect = require('./lib.dialect');
 
