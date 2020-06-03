@@ -41,6 +41,10 @@ module.exports = (app, prefix) => {
     if (nconf.get('web:public_host')) {
       process.env.NPOMF_FILE_URL = 'https://' + nconf.get('web:public_host') + '/f';
     }
+    if (nconf.get('web:public_url')) {
+      const url = nconf.get('web:public_url').replace(/\/$/, ''); // strip any trailing slash
+      process.env.NPOMF_FILE_URL = url + '/f';
+    }
     if (diskConfig.storage && diskConfig.storage.download_url) {
       process.env.NPOMF_FILE_URL = diskConfig.storage.download_url + '/f'
     }

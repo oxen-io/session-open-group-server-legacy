@@ -34,7 +34,7 @@ services:
       web__listen: 0.0.0.0
       # web__port:  ${PORT?Variable PORT not set}
       web__port: 7070
-      web__public_host: ${DOMAIN?Variable DOMAIN not set}
+      web__public_url: "https://${DOMAIN?Variable DOMAIN not set}"
       admin__listen: unified
       admin__modKey: enableAdmin
       database__default__type: mysql

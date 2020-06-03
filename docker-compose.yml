@@ -64,7 +64,7 @@ services:
     environment:
       stream__host: redis
       web__listen: unified
-      web__public_host: ${DOMAIN?Variable DOMAIN not set}
+      web__public_url: "https://${DOMAIN?Variable DOMAIN not set}"
       admin__listen: unified
       admin__modKey: enableAdmin
       database__default__type: mysql
