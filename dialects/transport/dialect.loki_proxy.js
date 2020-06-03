@@ -451,11 +451,11 @@ module.exports = (app, prefix) => {
     // console.log('secure_rpc body', req.body, typeof req.body);
 
     if (!req.body || !req.body.ciphertext) {
-      console.warn('not JSON or no cipherText', req.body);
+      console.warn('not JSON or no ciphertext', req.body);
       return sendresponse({
         meta: {
           code: 400,
-          error: "not JSON or no cipherText",
+          error: "not JSON or no ciphertext",
           headers: req.headers,
           body: req.body,
         },

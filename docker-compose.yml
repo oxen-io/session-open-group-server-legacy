@@ -64,6 +64,7 @@ services:
     environment:
       stream__host: redis
       web__listen: unified
+      web__public_host: ${DOMAIN?Variable DOMAIN not set}
       admin__listen: unified
       admin__modKey: enableAdmin
       database__default__type: mysql
@@ -80,7 +81,7 @@ services:
       # these are defaults...
       #NPOMF_DB_FILENAME: ./databases/pomf_files.db
       #NPOMF_MAX_UPLOAD_SIZE: 1000000 # 10mb
-      NPOMF_FILE_URL: "https://${DOMAIN?Variable DOMAIN not set}/f"
+      #NPOMF_FILE_URL: "https://${DOMAIN?Variable DOMAIN not set}/f"
       #api__url: http://unified:7070/
       #admin__url: http://unified:3000/
       VIRTUAL_PORT: 7070
