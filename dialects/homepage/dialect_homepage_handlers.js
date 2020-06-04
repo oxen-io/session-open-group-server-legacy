@@ -24,6 +24,9 @@ const homePageHandler = async (req, res) => {
   if (nconf.get('web:public_host')) {
     public_url = 'https://' + nconf.get('web:public_host')
   }
+  if (nconf.get('web:public_url')) {
+    public_url = nconf.get('web:public_url')
+  }
   // console.log('disk_config', disk_config);
   cache.getAnnotations('channel', 1, function(note, err) {
     if (err) console.error('error', err)
