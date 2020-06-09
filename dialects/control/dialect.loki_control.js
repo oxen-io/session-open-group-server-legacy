@@ -132,6 +132,11 @@ module.exports = (app, prefix) => {
       ok = true;
     }
 
+    // GET /token is valid, if you're passing a token...
+    if (req.method.toLowerCase() === 'get' && req.path.match(/^\/token/i)) {
+      ok = true;
+    }
+
     // all loki endpoints are valid
     if (req.path.match(/^\/loki\/v/)) {
       ok = true;
