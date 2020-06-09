@@ -12,6 +12,8 @@ COPY dialects/ dialects/
 COPY logic/ logic/
 COPY models/ models/
 COPY test/ test/
+COPY views/ views/
+COPY public/ public/
 
 # set up nodepomf
 COPY nodepomf/ nodepomf/

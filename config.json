@@ -8,6 +8,7 @@
   "web": {
     "port": 7070,
     "listen": "0.0.0.0",
+    "public_url": "https://localhost",
     "mounts": [
       {
         "destination": "",
@@ -20,6 +21,10 @@
       {
         "destination": "/stream/0",
         "dialect": "appdotnet_official"
+      },
+      {
+        "destination": "",
+        "dialect": "../dialects/transport/dialect.loki_proxy"
       },
       {
         "destination": "",

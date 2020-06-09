@@ -7,7 +7,7 @@ const crypto       = require('crypto');
 const bb           = require('bytebuffer');
 const libsignal    = require('libsignal');
 const adnServerAPI = require('../fetchWrapper');
-const config       = require('../config');
+const config       = require('../lib.config');
 
 const ADN_SCOPES = 'basic stream write_post follow messages update_profile files export';
 

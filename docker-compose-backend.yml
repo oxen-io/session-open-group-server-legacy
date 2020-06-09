@@ -34,6 +34,7 @@ services:
       web__listen: 0.0.0.0
       # web__port:  ${PORT?Variable PORT not set}
       web__port: 7070
+      web__public_url: "https://${DOMAIN?Variable DOMAIN not set}"
       admin__listen: unified
       admin__modKey: enableAdmin
       database__default__type: mysql
@@ -51,7 +52,7 @@ services:
       #NPOMF_MAX_UPLOAD_SIZE: 1000000 # 10mb
       # if you don't set this, file uploads aren't going to work
       # tho you can set it in the loki.ini
-      NPOMF_FILE_URL: "https://${DOMAIN?Variable DOMAIN not set}/f"
+      #NPOMF_FILE_URL: "https://${DOMAIN?Variable DOMAIN not set}/f"
       #api__url: http://unified:7070/
       #admin__url: http://unified:3000/
     volumes:

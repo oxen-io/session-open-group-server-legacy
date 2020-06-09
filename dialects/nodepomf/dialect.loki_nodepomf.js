@@ -9,6 +9,7 @@ module.exports = (app, prefix) => {
   // set cache based on dispatcher object
   cache = app.dispatcher.cache;
   const utilties = overlay.setup(cache, app.dispatcher);
+  const nconf = app.nconf;
   const { storage, logic, config, dialect } = utilties;
 
   // start server
@@ -30,9 +31,19 @@ module.exports = (app, prefix) => {
   if (process.env.NPOMF_FILE_URL === undefined) {
     var diskConfig = config.getDiskConfig();
     //console.log('storage config', diskConfig.storage)
-    process.env.NPOMF_FILE_URL = '/f'; // public url for downloading files
-    if (diskConfig.api && diskConfig.api.public_url) {
-      process.env.NPOMF_FILE_URL = diskConfig.api.public_url + '/f'
+
+    // default public url for downloading files
+    process.env.NPOMF_FILE_URL = '/f';
+
+    // we no longer support api or api.public_url
+    // allow web:public_host to override it
+    // host includes port (otherwise i'd be hostname)
+    if (nconf.get('web:public_host')) {
+      process.env.NPOMF_FILE_URL = 'https://' + nconf.get('web:public_host') + '/f';
+    }
+    if (nconf.get('web:public_url')) {
+      const url = nconf.get('web:public_url').replace(/\/$/, ''); // strip any trailing slash
+      process.env.NPOMF_FILE_URL = url + '/f';
     }
     if (diskConfig.storage && diskConfig.storage.download_url) {
       process.env.NPOMF_FILE_URL = diskConfig.storage.download_url + '/f'
