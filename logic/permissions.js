@@ -35,6 +35,7 @@ module.exports = {
         }
       }
       // by default everyone is not allowed
+      console.warn('logic:::permissions:::passesWhitelist - pubKey', pubKey, 'not whitelisted');
       return false;
     }
     // in blacklist mode
