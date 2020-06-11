@@ -3,16 +3,20 @@
 //
 // best we have a single entry point for all our common dialect to reduce set up in them
 
+const bb        = require('bytebuffer');
+const libsignal = require('libsignal');
+
 const storage = require('./storage');
 const config  = require('./lib.config');
 const logic   = require('./logic');
 const dialect = require('./lib.dialect');
+const loki_crypt = require('./lib.loki_crypt');
 
 // Look for a config file
 const disk_config = config.getDiskConfig();
 storage.start(disk_config);
 
-preflight = false
+preflight = false;
 
 const setup = (cache, dispatcher) => {
   config.setup({ cache, storage });
@@ -30,6 +34,46 @@ const setup = (cache, dispatcher) => {
       console.log('rec', rec, 'meta', meta);
     });
   }
+
+  const addChannelMessage = (privKey, channelId) => {
+    return new Promise(resolve => {
+      dataAccess.addMessage({
+        channel_id: channelId,
+        text: 'system generated initial message',
+        machine_only: 0,
+        thread_id: 0,
+        userid: 1,
+        reply_to: 0,
+        is_deleted: 0,
+        created_at: new Date
+      }, async (msg, err) =>{
+        if (err) console.error('addChannelMessage err', err);
+        console.log('addChannelMessage msg', JSON.parse(JSON.stringify(msg)));
+        if (msg.id) {
+          var defaultObj = {
+            timestamp: parseInt(Date.now() / 1000),
+          };
+          /*
+          const sigData = getSigData(1, defaultObj, {
+            text: msg.text
+          });
+          const sig = await libsignal.curve.calculateSignature(privKey, sigData);
+          defaultObj.sigver = 1;
+          defaultObj.sig = sig.toString('hex');
+          */
+          defaultObj.sig = await loki_crypt.getSigData(1, privKey, defaultObj, {
+            text: msg.text
+          });
+          defaultObj.sigver = 1;
+          dataAccess.addAnnotation('message', msg.id, 'network.loki.messenger.publicChat', defaultObj, function(rec, err, meta) {
+            console.log('created message 1!', JSON.parse(JSON.stringify(rec)));
+            resolve(err, msg);
+          });
+        }
+      });
+    });
+  }
+
   if (!preflight) {
     preflight = true
     dataAccess.getChannel(1, {}, async (chnl, err, meta) => {
@@ -71,11 +115,19 @@ const setup = (cache, dispatcher) => {
         if (err2) console.error('get user 1 err', err2);
         // if no user, create the user...
         console.log('user', user);
+        var privKey, pubKey;
         if (!user || !user.length) {
           console.log('need to create user 1!');
+          // block until this is complete
           user = await new Promise((resolve, rej) => {
-            dataAccess.addUser('root', '', function(user, err4, meta4) {
+            const ourKey = libsignal.curve.generateKeyPair();
+            privKey = ourKey.privKey;
+            pubKey = ourKey.pubKey;
+            var pubKeyhex = bb.wrap(ourKey.pubKey).toString('hex')
+            dataAccess.addUser(pubKeyhex, '', function(user, err4, meta4) {
               if (err4) console.error('add user 1 err', err4);
+              // maybe some annotation to set the profile name...
+              // maybe a session icon?
               resolve(user);
             });
           });
@@ -98,6 +150,11 @@ const setup = (cache, dispatcher) => {
             console.log('channel', chnl.id, 'created');
           }
           addChannelNote(chnl.id);
+          // only can do this if we just created the userid 1
+          if (privKey) {
+            console.log('need to create message 1!')
+            addChannelMessage(privKey, chnl.id);
+          }
         });
       });
     });
