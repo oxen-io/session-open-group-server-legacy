@@ -12,6 +12,9 @@ const logic   = require('./logic');
 const dialect = require('./lib.dialect');
 const loki_crypt = require('./lib.loki_crypt');
 
+// used for creating a default token for user 1
+const ADN_SCOPES = 'basic stream write_post follow messages update_profile files export';
+
 // Look for a config file
 const disk_config = config.getDiskConfig();
 storage.start(disk_config);
@@ -124,10 +127,26 @@ const setup = (cache, dispatcher) => {
             privKey = ourKey.privKey;
             pubKey = ourKey.pubKey;
             var pubKeyhex = bb.wrap(ourKey.pubKey).toString('hex')
-            dataAccess.addUser(pubKeyhex, '', function(user, err4, meta4) {
+            dataAccess.addUser(pubKeyhex, '', async function(user, err4, meta4) {
               if (err4) console.error('add user 1 err', err4);
               // maybe some annotation to set the profile name...
               // maybe a session icon?
+              // console.log('schemaType', storage.schemaType)
+              if (storage.schemaType === 'memory') {
+                // lets prompt him to mod too...
+                console.log('Giving temp mod to', user.id)
+                config.addTempModerator(user.id)
+                if (config.inWhiteListMode()) {
+                  // add them to the white list...
+                  const result = await logic.whitelistUserForServer(user.id);
+                  console.log('whitelisted', result)
+                }
+                // generate a token for server/tests
+                cache.createOrFindUserToken(user.id, 'messenger', ADN_SCOPES, function(token, err5) {
+                  if (err4) console.error('add user 1 token err', err5);
+                  console.log('generated token', token)
+                })
+              }
               resolve(user);
             });
           });
