@@ -251,6 +251,7 @@ module.exports = {
       console.warn('logic:::permissions::whitelistUserFromServer - failed to whitelist', result);
       return false;
     }
+    return true
   },
   unwhitelistUserFromServer: async userid => {
     if (userid === undefined) {

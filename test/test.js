@@ -94,7 +94,7 @@ const ensureUnifiedServer = () => {
         startPlatform = require('../server/app');
         weStartedUnifiedServer = true;
       } else {
-        console.log('detected running overlay server, testing that');
+        console.log('detected running unified server, testing that');
       }
       resolve();
     });
@@ -128,6 +128,9 @@ const selectModToken = async (channelId) => {
     console.warn('cant read moderators for channel', channelId, res);
     return;
   }
+  // we can't make a moderator if we didn't start the server...
+  // what about the admin API, it's only for adn primitives...
+  // so we need a network-based API for overlay like functions?
   if (!modRes.response.moderators.length && !weStartedUnifiedServer) {
     console.warn('no moderators for channel', channelId + ', cant addTempMod skipping moderation tests');
     return;
@@ -180,7 +183,24 @@ const selectModToken = async (channelId) => {
       // not available without proxy-admin...
       cache.getAPITokenByUsername(username, function(data, err) {
         if (err) console.error('getModTokenByUsername err', err);
-        //console.log('data', data)
+        // console.log('data', data)
+        if (data === null) {
+          console.log('no tokens for mod', username)
+          return cache.getUserID(username, function(user, err) {
+            if (err) console.error('getModTokenByUsername - getUserID', err)
+            if (!user.id) {
+              return reject()
+            }
+            cache.createOrFindUserToken(user.id, 'messenger', ADN_SCOPES, function(token, err) {
+              if (err) console.error('getModTokenByUsername - createOrFindUserToken', err)
+              if (!token) {
+                return reject()
+              }
+              // console.log('token', token)
+              resolve(token.token)
+            })
+          })
+        }
         resolve(data.token);
       });
     });
@@ -231,7 +251,9 @@ let testInfo = {
   adminApi,
   ourKey,
   ourPubKeyHex,
-  disk_config
+  config,
+  channelId: 1,
+  selectModToken
 }
 
 // requires overlayApi to be configured with a token
@@ -319,7 +341,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
 
     it('set token', async function() {
       tokenString = testInfo.tokenString;
-      console.log('set token tokenString', tokenString);
+      // console.log('set token tokenString', tokenString);
       // set token
       overlayApi.token = tokenString;
       platformApi.token = tokenString;

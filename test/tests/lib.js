@@ -43,7 +43,7 @@ const decodeToken = async (ourKey, result) => {
   );
   const token = await DHDecrypt(symmetricKey, ivAndCiphertext);
   tokenString = token.toString('utf8');
-  console.log('decodeToken::tokenString', tokenString)
+  // console.log('decodeToken::tokenString', tokenString)
 
   return tokenString;
 }

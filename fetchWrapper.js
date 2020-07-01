@@ -1,3 +1,4 @@
+const { URL, URLSearchParams } = require('url'); // node 8.x support
 
 // ES2015 arrow functions cannot be constructors
 const adnServerAPI = function(url, token) {
@@ -7,7 +8,7 @@ const adnServerAPI = function(url, token) {
 
   // make a request to the server
   this.serverRequest = async (endpoint, options = {}) => {
-    const { params = {}, method, objBody } = options;
+    const { params = {}, method, objBody, rawBody } = options;
     const url = new URL(`${this.base_url}/${endpoint}`);
     if (params) {
       url.search = new URLSearchParams(params);
@@ -25,6 +26,8 @@ const adnServerAPI = function(url, token) {
       if (objBody) {
         headers['Content-Type'] = 'application/json';
         fetchOptions.body = JSON.stringify(objBody);
+      } else if (rawBody) {
+        fetchOptions.body = rawBody
       }
       fetchOptions.headers = new Headers(headers);
       result = await fetch(url, fetchOptions || undefined);
@@ -41,10 +44,12 @@ const adnServerAPI = function(url, token) {
         response,
       };
     }
+    var text
     try {
-      response = await result.json();
+      text = await result.text();
+      response = JSON.parse(text)
     } catch (e) {
-      console.log(`serverRequest json parse ${e}`);
+      console.log(`serverRequest json parse ${e}, text: ${text}`);
       return {
         err: e,
         statusCode: result.status,

@@ -46,6 +46,9 @@ const memoryUpdate = (model, filter, data, callback) => {
 function start(config) {
   // schema backend type
   const schemaType = process.env.database__default__type || config && config.database && config.database.type ||'memory';
+  // FIXME: move to lib.config
+  // expose the set schemaType
+  module.exports.schemaType = schemaType;
   //console.log('storage config', config)
   const options = {
     host: config && config.database && config.database.host || 'localhost',

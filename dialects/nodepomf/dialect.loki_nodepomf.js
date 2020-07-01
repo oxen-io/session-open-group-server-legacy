@@ -23,7 +23,8 @@ module.exports = (app, prefix) => {
   }
 
   if (process.env.NPOMF_MAX_UPLOAD_SIZE === undefined) {
-    process.env.NPOMF_MAX_UPLOAD_SIZE = 1000000; // 10mb
+    // if not set, pull from nconf, else default
+    process.env.NPOMF_MAX_UPLOAD_SIZE = nconf.get('limits:default:max_file_size') || 10 * 1000 * 1000; // 10mb
   }
   // Loki messenger requires this to be an absolute URL
   // I think it's better to fix messenger
