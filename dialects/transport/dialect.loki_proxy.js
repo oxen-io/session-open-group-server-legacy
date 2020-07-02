@@ -17,19 +17,19 @@ const FILE_SERVER_PUB_KEY_FILE = 'proxy.pub'
 
 const libloki_crypt = require('./lib.loki_crypt');
 
-console.log('initializing loki_proxy subsystem');
+console.log('dialect.loki_proxy - initializing loki_proxy subsystem');
 if (!fs.existsSync(FILE_SERVER_PRIV_KEY_FILE)) {
   const serverKey = libsignal.curve.generateKeyPair();
-  console.log('no private key, generating new keyPair, saving as', FILE_SERVER_PRIV_KEY_FILE);
+  console.log('dialect.loki_proxy - no private key, generating new keyPair, saving as', FILE_SERVER_PRIV_KEY_FILE);
   fs.writeFileSync(FILE_SERVER_PRIV_KEY_FILE, serverKey.privKey, 'binary');
   if (!fs.existsSync(FILE_SERVER_PUB_KEY_FILE)) {
-    console.log('no public key, saving as', FILE_SERVER_PUB_KEY_FILE);
+    console.log('dialect.loki_proxy - no public key, saving as', FILE_SERVER_PUB_KEY_FILE);
     fs.writeFileSync(FILE_SERVER_PUB_KEY_FILE, serverKey.pubKey, 'binary');
   }
 }
 // should have files by this point
 if (!fs.existsSync(FILE_SERVER_PUB_KEY_FILE)) {
-  console.log('Have', FILE_SERVER_PRIV_KEY_FILE, 'without', FILE_SERVER_PUB_KEY_FILE);
+  console.log('dialect.loki_proxy - Have', FILE_SERVER_PRIV_KEY_FILE, 'without', FILE_SERVER_PUB_KEY_FILE);
   // maybe nuke FILE_SERVER_PRIV_KEY_FILE and regen
   process.exit(1);
 }
@@ -38,7 +38,7 @@ const serverPrivKey = fs.readFileSync(FILE_SERVER_PRIV_KEY_FILE);
 const serverPubKey = fs.readFileSync(FILE_SERVER_PUB_KEY_FILE);
 
 const serverPubKey64 = bb.wrap(serverPubKey).toString('base64');
-console.log('serverPubKey', serverPubKey.toString('hex'))
+console.log('dialect.loki_proxy - serverPubKey', serverPubKey.toString('hex'))
 
 
 // mount will set this in our module.exports

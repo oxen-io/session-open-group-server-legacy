@@ -24,6 +24,10 @@
       },
       {
         "destination": "",
+        "dialect": "config"
+      },
+      {
+        "destination": "",
         "dialect": "../dialects/transport/dialect.loki_proxy"
       },
       {
@@ -56,6 +60,13 @@
       "type": "memory",
       "options": {
       }
+    }
+  },
+  "limits": {
+    "defaults": {
+      "following": "unlimited",
+      "max_file_size": 10000000,
+      "storage": 0
     }
   }
 }

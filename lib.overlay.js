@@ -12,16 +12,15 @@ const logic   = require('./logic');
 const dialect = require('./lib.dialect');
 const loki_crypt = require('./lib.loki_crypt');
 
+// used for creating a default token for user 1
+const ADN_SCOPES = 'basic stream write_post follow messages update_profile files export';
+
 // Look for a config file
 const disk_config = config.getDiskConfig();
-storage.start(disk_config);
 
 preflight = false;
 
 const setup = (cache, dispatcher) => {
-  config.setup({ cache, storage });
-  logic.setup({ storage, cache, config });
-  dialect.setup({ dispatcher });
 
   // I guess we're do preflight checks here...
   const dataAccess = cache;
@@ -31,7 +30,9 @@ const setup = (cache, dispatcher) => {
     var defaultObj = {"name":"Your Public Chat","description":"Your public chat room","avatar":"images/group_default.png"};
     dataAccess.addAnnotation('channel', channelId, 'net.patter-app.settings', defaultObj, function(rec, err, meta) {
       if (err) console.error('err', err);
-      console.log('rec', rec, 'meta', meta);
+      if (!rec) {
+        console.warn('annotation', JSON.parse(JSON.stringify(rec)), 'meta', meta);
+      }
     });
   }
 
@@ -48,7 +49,7 @@ const setup = (cache, dispatcher) => {
         created_at: new Date
       }, async (msg, err) =>{
         if (err) console.error('addChannelMessage err', err);
-        console.log('addChannelMessage msg', JSON.parse(JSON.stringify(msg)));
+        // console.log('addChannelMessage msg', JSON.parse(JSON.stringify(msg)));
         if (msg.id) {
           var defaultObj = {
             timestamp: parseInt(Date.now() / 1000),
@@ -66,7 +67,8 @@ const setup = (cache, dispatcher) => {
           });
           defaultObj.sigver = 1;
           dataAccess.addAnnotation('message', msg.id, 'network.loki.messenger.publicChat', defaultObj, function(rec, err, meta) {
-            console.log('created message 1!', JSON.parse(JSON.stringify(rec)));
+            // , JSON.parse(JSON.stringify(rec))
+            console.log('created initial message for mobile');
             resolve(err, msg);
           });
         }
@@ -74,8 +76,15 @@ const setup = (cache, dispatcher) => {
     });
   }
 
+  // only do this once on startup...
   if (!preflight) {
     preflight = true
+
+    config.setup({ cache, storage });
+    logic.setup({ storage, cache, config });
+    dialect.setup({ dispatcher });
+    storage.start(disk_config);
+
     dataAccess.getChannel(1, {}, async (chnl, err, meta) => {
       if (err) console.error('channel 1 get err', err);
       if (chnl && chnl.id) {
@@ -109,25 +118,44 @@ const setup = (cache, dispatcher) => {
         }
         return;
       }
-      console.log('need to create channel 1!');
+      console.log('need to create initial channel');
       // FIXME: user token_helpers's findOrCreateUser?
       dataAccess.getUser(1, async (user, err2, meta2) => {
         if (err2) console.error('get user 1 err', err2);
         // if no user, create the user...
-        console.log('user', user);
+        // user === null when D.N.E.
+        // console.log('user', user);
         var privKey, pubKey;
         if (!user || !user.length) {
-          console.log('need to create user 1!');
+          console.log('need to create initial user');
           // block until this is complete
           user = await new Promise((resolve, rej) => {
             const ourKey = libsignal.curve.generateKeyPair();
             privKey = ourKey.privKey;
             pubKey = ourKey.pubKey;
             var pubKeyhex = bb.wrap(ourKey.pubKey).toString('hex')
-            dataAccess.addUser(pubKeyhex, '', function(user, err4, meta4) {
+            dataAccess.addUser(pubKeyhex, '', async function(user, err4, meta4) {
               if (err4) console.error('add user 1 err', err4);
               // maybe some annotation to set the profile name...
               // maybe a session icon?
+              // console.log('schemaType', storage.schemaType)
+              if (storage.schemaType === 'memory') {
+                // lets prompt him to mod too...
+                console.log('Giving temp mod to', user.id)
+                config.addTempModerator(user.id)
+                if (config.inWhiteListMode()) {
+                  // add them to the white list...
+                  const result = await logic.whitelistUserForServer(user.id);
+                  if (!result) {
+                    console.warn('could not whitelist!')
+                  }
+                }
+                // generate a token for server/tests
+                cache.createOrFindUserToken(user.id, 'messenger', ADN_SCOPES, function(token, err5) {
+                  if (err4) console.error('add user 1 token err', err5);
+                  console.log('generated token', JSON.parse(JSON.stringify(token)));
+                })
+              }
               resolve(user);
             });
           });
@@ -152,7 +180,7 @@ const setup = (cache, dispatcher) => {
           addChannelNote(chnl.id);
           // only can do this if we just created the userid 1
           if (privKey) {
-            console.log('need to create message 1!')
+            //console.log('need to create message 1!')
             addChannelMessage(privKey, chnl.id);
           }
         });
