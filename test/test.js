@@ -6,8 +6,8 @@ const lokinet      = require('loki-launcher/lokinet');
 const crypto       = require('crypto');
 const bb           = require('bytebuffer');
 const libsignal    = require('libsignal');
-const adnServerAPI = require('../fetchWrapper');
-const config       = require('../lib.config');
+const adnServerAPI = require('../server/fetchWrapper.js');
+const config       = require('../lib.config.js');
 
 const ADN_SCOPES = 'basic stream write_post follow messages update_profile files export';
 

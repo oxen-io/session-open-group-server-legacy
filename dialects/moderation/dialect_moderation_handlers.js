@@ -1,5 +1,5 @@
 const helpers = require('./dialect_moderation_helpers');
-const adnServerAPI = require('../../fetchWrapper');
+const adnServerAPI = require('../../server/fetchWrapper');
 const token_helpers = require('../token/dialect_tokens_helpers');
 
 // all input / output filtering should happen here
