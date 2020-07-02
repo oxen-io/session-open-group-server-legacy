@@ -55,7 +55,7 @@ console.log('platform_api_url  ', platform_api_url);
 
 // configure the admin interface for use
 // can be easily swapped out later
-const proxyAdmin = require('../server/dataaccess.proxy-admin');
+const proxyAdmin = require('../server/dataaccess/dataaccess.proxy-admin');
 // fake dispatcher that only implements what we need
 proxyAdmin.dispatcher = {
   // ignore local user updates
@@ -181,17 +181,17 @@ const selectModToken = async (channelId) => {
   function getModTokenByUsername(username) {
     return new Promise((resolve, reject) => {
       // not available without proxy-admin...
-      cache.getAPITokenByUsername(username, function(data, err) {
-        if (err) console.error('getModTokenByUsername err', err);
-        // console.log('data', data)
+      cache.getAPITokenByUsername(username, function(err, data) {
+        if (err) console.error('getModTokenByUsername - getAPITokenByUsername err', err);
+        //console.log('getModTokenByUsername - getAPITokenByUsername data', data)
         if (data === null) {
           console.log('no tokens for mod', username)
-          return cache.getUserID(username, function(user, err) {
+          return cache.getUserID(username, function(err, user) {
             if (err) console.error('getModTokenByUsername - getUserID', err)
             if (!user.id) {
               return reject()
             }
-            cache.createOrFindUserToken(user.id, 'messenger', ADN_SCOPES, function(token, err) {
+            cache.createOrFindUserToken(user.id, 'messenger', ADN_SCOPES, function(err, token) {
               if (err) console.error('getModTokenByUsername - createOrFindUserToken', err)
               if (!token) {
                 return reject()
@@ -260,7 +260,7 @@ let testInfo = {
 function getUserID(pubKey, token) {
   return new Promise((resolve, rej) => {
     if (token) cache.token = token;
-    cache.getUserID(pubKey, function(user, err, meta) {
+    cache.getUserID(pubKey, function(err, user, meta) {
       //assert.equal(200, result.statusCode);
       resolve(user && user.id);
     });
