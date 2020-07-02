@@ -14,7 +14,7 @@ module.exports = {
     // take an id return a user object
     const getUserByUsernamePromise = pubKey => {
       return new Promise((resolve, rej) => {
-        cache.getUserID(pubKey, (user, err) => {
+        cache.getUserID(pubKey, (err, user) => {
           if (err) console.error('logic:::permissions::blacklistUserFromServer - getUserID err', err);
           resolve(user);
         });
@@ -75,7 +75,7 @@ module.exports = {
   // FIXME: should return a promise
   getPermissionsByUser: (pubKey, entity, entityId) => {
     // get userID
-    cache.getUserID(pubKey, (user, err) => {
+    cache.getUserID(pubKey, (err, user) => {
       this.getPermissionsByUserId(user.id, entity, entityId)
     })
   },
@@ -162,7 +162,7 @@ module.exports = {
     // take an id return a user object
     const getUserPromise = userid => {
       return new Promise((resolve, rej) => {
-        cache.getUser(userid, (user, err) => {
+        cache.getUser(userid, (err, user) => {
           if (err) console.error('logic:::permissions::blacklistUserFromServer - getUserID err', err);
           resolve(user);
         });
@@ -171,10 +171,10 @@ module.exports = {
 
     const removeAllTokens = username => {
       return new Promise( async (resolve, rej) => {
-        cache.getAPITokenByUsername(username, (usertoken, err, meta) => {
+        cache.getAPITokenByUsername(username, (err, usertoken, meta) => {
           if (err) console.error('logic:::permissions::blacklistUserFromServer - getAPITokenByUsername err', err);
           if (usertoken) {
-            cache.delAPIUserToken(usertoken.token, async (delToken, err) => {
+            cache.delAPIUserToken(usertoken.token, async (err, delToken) => {
               if (err) console.error('logic:::permissions::blacklistUserFromServer - delAPIUserToken err', err);
               await removeAllTokens(username);
               resolve();
