@@ -10,7 +10,6 @@ const DHDecrypt = async (symmetricKey, ivAndCiphertext) => {
 let overlayApi;
 
 function get_challenge(ourPubKeyHex) {
-  console.log('get_challenge')
   return new Promise(async (resolve, rej) => {
     let tokenString, result
     try {
