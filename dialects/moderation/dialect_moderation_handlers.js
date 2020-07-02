@@ -64,20 +64,19 @@ const moderatorUpdateChannel = async (req, res) => {
     }));
   }
   helpers.validGlobal(req.token, res, (usertoken, access_list) => {
-    // console.log('body', req.body)
-    cache.getChannel(channelId, {} , function(channel, err) {
-      if (err) console.error(err);
+    cache.getChannel(channelId, {} , function(err, channel) {
+      if (err) console.error('moderation_handlers::moderatorUpdateChannel - getChannel err', err);
       if (channel === null) {
         return res.status(500).type('application/json').end(JSON.stringify({
           error: err,
           stub: 'channel_is_null',
         }));
       }
-      cache.getUser(channel.ownerid, function(user, err) {
-        if (err) console.error('moderatorUpdateChannel getUser err', err);
+      cache.getUser(channel.ownerid, function(err, user) {
+        if (err) console.error('moderation_handlers::moderatorUpdateChannel - getUser err', err);
         const username = user.username;
-        cache.getAPITokenByUsername(username, async function(token, err) {
-          if (err) console.error('moderatorUpdateChannel getAPITokenByUsername err', err);
+        cache.getAPITokenByUsername(username, async function(err, token) {
+          if (err) console.error('moderation_handlers::moderatorUpdateChannel - getAPITokenByUsername err', err);
 
           const applyUpdate = async (token) => {
             // now place a normal request to the platform...
@@ -126,7 +125,8 @@ const moderatorUpdateChannel = async (req, res) => {
 
 const getDeletesHandler = (req, res) => {
   const numId = parseInt(req.params.id);
-  cache.getChannelDeletions(numId, req.apiParams, (interactions, err, meta) => {
+  cache.getChannelDeletions(numId, req.apiParams, (err, interactions, meta) => {
+    if (err) console.error('moderation_handlers::getDeletesHandler - getChannelDeletions err', err)
     const items = interactions.map(interaction => ({
       delete_at: interaction.datetime,
       message_id: interaction.typeid,
@@ -157,7 +157,7 @@ const deleteMultipleHandler = (req, res) => {
     return;
   }
   dialect.validUser(req.token, res, async usertoken => {
-    const [ code, err, messages ] = await helpers.getMessages(ids);
+    const [ err, code, messages ] = await helpers.getMessages(ids);
     if (err) {
       console.error('dialect_moderation_handler::deleteMultipleHandler - getMessages err', err)
       const resObj = {
@@ -215,7 +215,6 @@ const deleteMultipleHandler = (req, res) => {
       },
       data: datas
     };
-    console.log('final', resObj.data)
     dialect.sendResponse(resObj, res);
   });
 };
@@ -384,7 +383,6 @@ const whitelistUserForServerHandler = async (req, res) => {
 
     if (userid[0] == '@') {
       const userAdnObjects = await helpers.getUsers([userid]);
-      console.log('whitelistUserForServerHandler userAdnObjects', userAdnObjects, 'for', userid);
       if (userAdnObjects.length == 1) {
         userid = userAdnObjects[0].id;
       } else {
@@ -393,9 +391,9 @@ const whitelistUserForServerHandler = async (req, res) => {
           const disk_config = config.getDiskConfig();
           if (disk_config.whitelist) {
             // the user isn't created yet and you can't create it
-            cache.addUser(userid.substring(1), '', (newUser, err2) => {
+            cache.addUser(userid.substring(1), '', (err2, newUser) => {
               if (err2) {
-                console.error('addUser err', err2);
+                console.error('moderation_handlers::whitelistUserForServerHandler - addUser err', err2);
                 return res.status(500).type('application/json').end(JSON.stringify({
                   error: 'addUser ' + err2,
                 }));

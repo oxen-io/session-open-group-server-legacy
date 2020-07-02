@@ -28,7 +28,7 @@ const setup = (cache, dispatcher) => {
   // preflight checks
   const addChannelNote = (channelId) => {
     var defaultObj = {"name":"Your Public Chat","description":"Your public chat room","avatar":"images/group_default.png"};
-    dataAccess.addAnnotation('channel', channelId, 'net.patter-app.settings', defaultObj, function(rec, err, meta) {
+    dataAccess.addAnnotation('channel', channelId, 'net.patter-app.settings', defaultObj, function(err, rec, meta) {
       if (err) console.error('err', err);
       if (!rec) {
         console.warn('annotation', JSON.parse(JSON.stringify(rec)), 'meta', meta);
@@ -47,7 +47,7 @@ const setup = (cache, dispatcher) => {
         reply_to: 0,
         is_deleted: 0,
         created_at: new Date
-      }, async (msg, err) =>{
+      }, async (err, msg) =>{
         if (err) console.error('addChannelMessage err', err);
         // console.log('addChannelMessage msg', JSON.parse(JSON.stringify(msg)));
         if (msg.id) {
@@ -66,7 +66,7 @@ const setup = (cache, dispatcher) => {
             text: msg.text
           });
           defaultObj.sigver = 1;
-          dataAccess.addAnnotation('message', msg.id, 'network.loki.messenger.publicChat', defaultObj, function(rec, err, meta) {
+          dataAccess.addAnnotation('message', msg.id, 'network.loki.messenger.publicChat', defaultObj, function(err, rec, meta) {
             // , JSON.parse(JSON.stringify(rec))
             console.log('created initial message for mobile');
             resolve(err, msg);
@@ -85,7 +85,7 @@ const setup = (cache, dispatcher) => {
     dialect.setup({ dispatcher });
     storage.start(disk_config);
 
-    dataAccess.getChannel(1, {}, async (chnl, err, meta) => {
+    dataAccess.getChannel(1, {}, async (err, chnl, meta) => {
       if (err) console.error('channel 1 get err', err);
       if (chnl && chnl.id) {
         const configWhitelistEnabled = !!disk_config.whitelist;
@@ -100,7 +100,7 @@ const setup = (cache, dispatcher) => {
 
           // would this work with proxy-admin system?
           // 0 = public, 1 = any user (has token)
-          dataAccess.updateChannel(1, { reader: configWhitelistEnabled ? 1 : 0 }, function(channel, err) {
+          dataAccess.updateChannel(1, { reader: configWhitelistEnabled ? 1 : 0 }, function(err, channel) {
             if (err) console.error('overlay updateChannel err', err);
             else console.log('updated channel permissions', channel);
           });
@@ -120,7 +120,7 @@ const setup = (cache, dispatcher) => {
       }
       console.log('need to create initial channel');
       // FIXME: user token_helpers's findOrCreateUser?
-      dataAccess.getUser(1, async (user, err2, meta2) => {
+      dataAccess.getUser(1, async (err2, user, meta2) => {
         if (err2) console.error('get user 1 err', err2);
         // if no user, create the user...
         // user === null when D.N.E.
@@ -134,7 +134,7 @@ const setup = (cache, dispatcher) => {
             privKey = ourKey.privKey;
             pubKey = ourKey.pubKey;
             var pubKeyhex = bb.wrap(ourKey.pubKey).toString('hex')
-            dataAccess.addUser(pubKeyhex, '', async function(user, err4, meta4) {
+            dataAccess.addUser(pubKeyhex, '', async function(err4, user, meta4) {
               if (err4) console.error('add user 1 err', err4);
               // maybe some annotation to set the profile name...
               // maybe a session icon?
@@ -151,8 +151,8 @@ const setup = (cache, dispatcher) => {
                   }
                 }
                 // generate a token for server/tests
-                cache.createOrFindUserToken(user.id, 'messenger', ADN_SCOPES, function(token, err5) {
-                  if (err4) console.error('add user 1 token err', err5);
+                cache.createOrFindUserToken(user.id, 'messenger', ADN_SCOPES, function(err5, token) {
+                  if (err5) console.error('add user 1 token err', err5);
                   console.log('generated token', JSON.parse(JSON.stringify(token)));
                 })
               }
@@ -172,7 +172,7 @@ const setup = (cache, dispatcher) => {
           readers: [],
           writers: [],
           editors: [],
-        }, (chnl, err3, meta3) => {
+        }, (err3, chnl, meta3) => {
           if (err3) console.error('addChannel err', err3);
           if (chnl && chnl.id) {
             console.log('channel', chnl.id, 'created');

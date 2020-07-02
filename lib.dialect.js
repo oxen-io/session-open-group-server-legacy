@@ -29,16 +29,16 @@ function validUser(token, res, cb) {
     if (!token) {
       return resolve(false);
     }
-    dispatcher.getUserClientByToken(token, (usertoken, err) => {
+    dispatcher.getUserClientByToken(token, (err, usertoken) => {
       if (err) {
-        console.error('validUser token', token, 'err', err);
+        console.error('lib.dialect::validUser - getUserClientByToken err', err, 'token', token);
         const resObj={
           meta: {
             code: 500,
             error_message: err
           }
         };
-        console.error('error trying to verify token:', token);
+        console.error('lib.dialect::validUser - error trying to verify token:', token);
         sendResponse(resObj, res);
         return resolve();
       }
@@ -50,7 +50,7 @@ function validUser(token, res, cb) {
             error_message: "Call requires authentication: Authentication required to fetch token."
           }
         };
-        console.error('token does not exist:', token);
+        console.error('lib.dialect::validUser - token does not exist:', token);
         sendResponse(resObj, res);
         return resolve();
       }
