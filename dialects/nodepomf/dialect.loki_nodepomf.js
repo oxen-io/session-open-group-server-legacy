@@ -4,6 +4,7 @@ const pathUtil = require('path');
 const fs = require('fs');
 const express = require('express');
 const lokinet = require('loki-launcher/lokinet');
+const configUtil = require('../../server/lib/lib.config.js')
 
 module.exports = (app, prefix) => {
   // set cache based on dispatcher object
@@ -20,6 +21,10 @@ module.exports = (app, prefix) => {
   if (!fs.existsSync(dir)) {
     console.log('creating nodepomf database directory', dir);
     lokinet.mkDirByPathSync(dir);
+  }
+
+  if (configUtil.isQuiet()) {
+    process.env.NPOMF_QUIET = true;
   }
 
   if (process.env.NPOMF_MAX_UPLOAD_SIZE === undefined) {

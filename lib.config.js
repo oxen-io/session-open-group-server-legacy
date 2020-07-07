@@ -51,8 +51,11 @@ let user_access = {};
 let whitelist_access = {};
 
 const updateUserAccess = () => {
+  const configUtil = require('./server/lib/lib.config.js')
   if (!updateFromDisk()) {
-    console.log('overlay:::config.js - no loki.ini config file');
+    if (!configUtil.isQuiet()) {
+      console.log('overlay:::config.js - no loki.ini config file');
+    }
     return;
   }
   const visualConfig = {...disk_config};
@@ -64,7 +67,9 @@ const updateUserAccess = () => {
   // load globals pubkeys from file and set their access level
   // if not array...
   if (!disk_config.globals) {
-    console.log('overlay:::config.js - no globals defined in loki.ini')
+    if (!configUtil.isQuiet()) {
+      console.log('overlay:::config.js - no globals defined in loki.ini')
+    }
   }
   for(const pubKey in disk_config.globals) {
     const access = disk_config.globals[pubKey];
@@ -74,7 +79,9 @@ const updateUserAccess = () => {
       if (user) {
         user_access[user.id] = access;
       } else {
-        console.log('global', pubKey, 'has not registered yet');
+        if (!configUtil.isQuiet()) {
+          console.log('global', pubKey, 'has not registered yet');
+        }
       }
     })
   }
@@ -88,7 +95,9 @@ const updateUserAccess = () => {
         if (user) {
           whitelist_access[user.id] = true;
         } else {
-          console.log('whitelist entry', pubKey, 'has not registered yet');
+          if (!configUtil.isQuiet()) {
+            console.log('whitelist entry', pubKey, 'has not registered yet');
+          }
         }
       });
     }
