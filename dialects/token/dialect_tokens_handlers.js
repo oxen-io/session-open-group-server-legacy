@@ -14,7 +14,7 @@ const getChallengeHandler = async (req, res) => {
   if (!pubKey) {
     console.warn('get_challenge pubKey missing');
     res.status(422).type('application/json').end(JSON.stringify({
-      error: 'PubKey missing',
+      error: 'pubKey missing',
     }));
     return;
   }
