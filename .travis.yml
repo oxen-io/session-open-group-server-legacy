@@ -8,4 +8,5 @@ before_script:
 - cp loki_template.ini loki.ini
 - cd nodepomf && npm install && cd ..
 - cd server && npm install && cd ..
+- node dialects/transport/dialect.loki_proxy.js
 cache: npm
