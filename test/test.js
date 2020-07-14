@@ -7,7 +7,9 @@ const crypto       = require('crypto');
 const bb           = require('bytebuffer');
 const libsignal    = require('libsignal');
 const adnServerAPI = require('../server/fetchWrapper.js');
+const loki_crypt   = require('../lib.loki_crypt');
 const config       = require('../lib.config.js');
+
 
 const ADN_SCOPES = 'basic stream write_post follow messages update_profile files export';
 
@@ -241,6 +243,7 @@ const selectModToken = async (channelId) => {
 // make our local keypair
 const ourKey = libsignal.curve.generateKeyPair();
 // encode server's pubKey in base64
+const privKey = ourKey.privKey;
 const ourPubKey64 = bb.wrap(ourKey.pubKey).toString('base64');
 const ourPubKeyHex = bb.wrap(ourKey.pubKey).toString('hex');
 console.log('running as', ourPubKeyHex);
@@ -286,11 +289,28 @@ function create_message(channelId) {
         // create a dummy message
         let result;
         try {
+          const bodyObj = {
+            text: 'testing message'
+          }
+          // set up note
+            const valueObj = {
+              timestamp: parseInt(Date.now() / 1000),
+            };
+            // probably could just let this be an invalid sig so it will
+            // never show in session clients
+            //valueObj.sig = await loki_crypt.getSigData(1, privKey, valueObj, bodyObj);
+            valueObj.sig = 'garbage value'
+            valueObj.sigver = 1;
+          // put note into body
+          bodyObj.annotations = [
+            {
+              type: 'network.loki.messenger.publicChat',
+              value: valueObj
+            }
+          ];
           result = await platformApi.serverRequest('channels/1/messages', {
             method: 'POST',
-            objBody: {
-              text: 'testing message',
-            },
+            objBody: bodyObj,
           });
           //console.log('create message result', result, 'token', platformApi.token);
           if (result.statusCode === 401) {
@@ -301,6 +321,29 @@ function create_message(channelId) {
             console.log('tokenInfo', tinfo);
           }
           assert.equal(200, result.statusCode);
+          assert.ok(result.response.data.entities);
+          assert.ok(result.response.data.text);
+          assert.ok(result.response.data.html);
+          assert.ok(result.response.data.user);
+          assert.ok(result.response.data.user.avatar_image);
+          // get annotation
+          const noteResult = await platformApi.serverRequest('channels/1/messages/' + result.response.data.id, {
+            params: {
+              include_annotations: 1
+            }
+          })
+          assert.equal(200, noteResult.statusCode);
+          assert.ok(noteResult.response.data);
+          assert.ok(noteResult.response.data.text === result.response.data.text);
+          assert.ok(noteResult.response.data.html === result.response.data.html);
+          assert.ok(noteResult.response.data.annotations);
+          assert.ok(noteResult.response.data.annotations[0]);
+          // validate type
+          assert.ok(noteResult.response.data.annotations[0].type === 'network.loki.messenger.publicChat');
+          // validate values
+          assert.ok(noteResult.response.data.annotations[0].value.sigver === 1);
+          assert.ok(noteResult.response.data.annotations[0].value.timestamp === valueObj.timestamp);
+          assert.ok(noteResult.response.data.annotations[0].value.sig === valueObj.sig);
         } catch (e) {
           console.error('platformApi.serverRequest err', e, result)
           return rej();
@@ -331,6 +374,11 @@ function get_message(messageId) {
 
 const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
   let channelId = 1; // default channel to try to test first
+
+  describe('non token tests', function() {
+    // don't need a token to test this...
+    require('./tests/homepage/homepage.js')(testInfo);
+  });
 
   // get our token
   let tokenString, userid, mod_userid;
@@ -401,6 +449,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       let messageId, messageId1, messageId2, messageId3, messageId4, messageId5
       it('create message to test with', async function() {
         // well we need to create a new message for moderation test
+        // we do the asserts inside create_message
         messageId = await create_message(channelId);
         messageId1 = await create_message(channelId);
         messageId2 = await create_message(channelId);
@@ -677,6 +726,11 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       });
     });
   });
+  describe('transport tests', function() {
+    require('./tests/transport/transport.js')(testInfo);
+  });
+  // I don't think there's any need to test our nodepomf glue...
+  // I don't think I have enough time to write test for control
 }
 
 // you can't use => with mocha, you'll loose this context
