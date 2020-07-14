@@ -275,7 +275,7 @@ module.exports = (testInfo) => {
     it('lsrpc get users by id', async function() {
       const payloadObj = {
         body: {}, // might need to b64 if binary...
-        endpoint: 'users?include_user_annotations=1&ids=@053b0ff9567a9ae0c2c62d5c37eb065b766e18d90e1c92c5a4a1ee1ba8d235b26e',
+        endpoint: 'users?include_user_annotations=1&ids=@' + testInfo.ourPubKeyHex,
         method: 'GET',
         headers: {},
       };
