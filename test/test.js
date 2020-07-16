@@ -396,6 +396,10 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       //userid = await getUserID(ourPubKeyHex);
     });
 
+    describe('transport tests', function() {
+      require('./tests/transport/transport.js')(testInfo);
+    });
+
     // test moderator security...
     describe('moderator security tests', function() {
       it('cant promote to moderator', async function() {
@@ -726,9 +730,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       });
     });
   });
-  describe('transport tests', function() {
-    require('./tests/transport/transport.js')(testInfo);
-  });
+  // overlayApi.token is banned at this point...
   // I don't think there's any need to test our nodepomf glue...
   // I don't think I have enough time to write test for control
 }
