@@ -289,6 +289,18 @@ module.exports = (testInfo) => {
     });
     it('lsrpc get/submit challenge', async function() {
       const ephemeralKey = libsignal.curve.generateKeyPair();
+      // whitelist support for this test
+      if (testInfo.config.inWhiteListMode()) {
+        // need to allow this
+        var oldToken = testInfo.platformApi.token // backup
+        const modToken = await testInfo.selectModToken(testInfo.channelId);
+        testInfo.platformApi.token = modToken // switch to mod
+        const result = await testInfo.platformApi.serverRequest('loki/v1/moderation/whitelist/@' + ephemeralKey.pubKey.toString('hex'), {
+          method: 'POST',
+        });
+        assert.equal(200, result.statusCode);
+        testInfo.platformApi.token = oldToken // restore
+      }
       const getChalPayloadObj = {
         // I think this is a stream, we may need to collect it all?
         body: null,
