@@ -92,6 +92,7 @@ const updateUserAccess = () => {
     for(const pubKey in disk_config.whitelist) {
       // translate pubKey to id of user
       cache.getUserID(pubKey, (err, user) => {
+        if (err) console.error('lib.config::updateUserAccess - getUserID err', err)
         if (user) {
           whitelist_access[user.id] = true;
         } else {
