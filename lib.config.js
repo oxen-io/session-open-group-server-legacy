@@ -74,7 +74,7 @@ const updateUserAccess = () => {
   for(const pubKey in disk_config.globals) {
     const access = disk_config.globals[pubKey];
     // translate pubKey to id of user
-    cache.getUserID(pubKey, (user, err) => {
+    cache.getUserID(pubKey, (err, user) => {
       // only if user has registered
       if (user) {
         user_access[user.id] = access;
@@ -91,7 +91,7 @@ const updateUserAccess = () => {
     whitelist_access = {};
     for(const pubKey in disk_config.whitelist) {
       // translate pubKey to id of user
-      cache.getUserID(pubKey, (user, err) => {
+      cache.getUserID(pubKey, (err, user) => {
         if (user) {
           whitelist_access[user.id] = true;
         } else {
