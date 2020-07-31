@@ -61,9 +61,12 @@ const proxyAdmin = require('../server/dataaccess/dataaccess.proxy-admin');
 // fake dispatcher that only implements what we need
 proxyAdmin.dispatcher = {
   // ignore local user updates
-  updateUser: (user, ts, cb) => { cb(user); },
+  updateUser: (user, ts, cb) => {
+    console.log('test.js::proxyAdmin.dispatcher.updateUser')
+    cb(false, user);
+  },
   // ignore local message updates
-  setMessage: (message, cb) => { if (cb) cb(message); },
+  setMessage: (message, cb) => { if (cb) cb(false, message); },
 }
 // backward compatible
 if (proxyAdmin.start) {
@@ -222,14 +225,14 @@ const selectModToken = async (channelId) => {
   /*
   if (res.response && res.response.data === null) {
     console.log('need to create a token for this moderator')
-    cache.getUserID(modPubKey, (user, err) => {
+    cache.getUserID(modPubKey, (err, user) => {
       if (err) console.error('getUserID err', err)
       if (!user || !user.id) {
         console.warn('No such moderator user object for', modPubKey);
         // create user...
         process.exit();
       }
-      cache.createOrFindUserToken(user.id, 'messenger', ADN_SCOPES, (tokenObj, err) => {
+      cache.createOrFindUserToken(user.id, 'messenger', ADN_SCOPES, (err, tokenObj) => {
         if (err) console.error('createOrFindUserToken err', err)
         console.log('tokenObj', tokenObj);
       })

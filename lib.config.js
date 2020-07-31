@@ -74,7 +74,7 @@ const updateUserAccess = () => {
   for(const pubKey in disk_config.globals) {
     const access = disk_config.globals[pubKey];
     // translate pubKey to id of user
-    cache.getUserID(pubKey, (user, err) => {
+    cache.getUserID(pubKey, (err, user) => {
       // only if user has registered
       if (user) {
         user_access[user.id] = access;
