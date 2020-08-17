@@ -71,6 +71,9 @@ const DHDecrypt64 = async (symmetricKey, cipherText64) => {
 }
 
 function makeSymmetricKey(privKey, pubKey) {
+  if (pubKey.byteLength === 32) {
+    pubKey = Buffer.concat([Buffer.from('05', 'hex'), pubKey])
+  }
   const keyAgreement = libsignal.curve.calculateAgreement(
     pubKey,
     privKey,
