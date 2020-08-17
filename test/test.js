@@ -6,8 +6,10 @@ const lokinet      = require('loki-launcher/lokinet');
 const crypto       = require('crypto');
 const bb           = require('bytebuffer');
 const libsignal    = require('libsignal');
-const adnServerAPI = require('../fetchWrapper');
-const config       = require('../lib.config');
+const adnServerAPI = require('../server/fetchWrapper.js');
+const loki_crypt   = require('../lib.loki_crypt');
+const config       = require('../lib.config.js');
+
 
 const ADN_SCOPES = 'basic stream write_post follow messages update_profile files export';
 
@@ -18,6 +20,10 @@ const disk_config = config.getDiskConfig();
 const config_path = path.join(__dirname, '/../config.json');
 nconf.argv().env('__').file({file: config_path});
 console.log('test config_path', config_path);
+
+// set this no matter what
+// libraries will need it to be correct too
+process.env['config-file-path'] = config_path
 
 const webport = nconf.get('web:port') || 7070;
 const webbind = nconf.get('web:listen') || '127.0.0.1';
@@ -55,13 +61,19 @@ console.log('platform_api_url  ', platform_api_url);
 
 // configure the admin interface for use
 // can be easily swapped out later
-const proxyAdmin = require('../server/dataaccess.proxy-admin');
+const proxyAdmin = require('../server/dataaccess/dataaccess.proxy-admin');
 // fake dispatcher that only implements what we need
 proxyAdmin.dispatcher = {
   // ignore local user updates
-  updateUser: (user, ts, cb) => { cb(user); },
+  updateUser: (user, ts, cb) => {
+    console.log('test.js::proxyAdmin.dispatcher.updateUser')
+    cb(false, user);
+  },
   // ignore local message updates
-  setMessage: (message, cb) => { if (cb) cb(message); },
+  setMessage: (message, cb) => {
+    console.log('test.js::proxyAdmin.dispatcher.setMessage', message)
+    if (cb) cb(false, message);
+  },
 }
 // backward compatible
 if (proxyAdmin.start) {
@@ -86,9 +98,9 @@ const ensureUnifiedServer = () => {
     console.log('unified port', webport);
     lokinet.portIsFree(webbind, webport, function(free) {
       //console.log(webbind + ':' + webport, 'free', free);
+
       if (free) {
         // make sure we use the same config...
-        process.env['config-file-path'] = config_path
         process.env['admin:modKey'] = 'JustMakingSureThisIsEnabled';
         hasAdminAPI = true;
         startPlatform = require('../server/app');
@@ -181,17 +193,17 @@ const selectModToken = async (channelId) => {
   function getModTokenByUsername(username) {
     return new Promise((resolve, reject) => {
       // not available without proxy-admin...
-      cache.getAPITokenByUsername(username, function(data, err) {
-        if (err) console.error('getModTokenByUsername err', err);
-        // console.log('data', data)
+      cache.getAPITokenByUsername(username, function(err, data) {
+        if (err) console.error('getModTokenByUsername - getAPITokenByUsername err', err);
+        //console.log('getModTokenByUsername - getAPITokenByUsername data', data)
         if (data === null) {
           console.log('no tokens for mod', username)
-          return cache.getUserID(username, function(user, err) {
+          return cache.getUserID(username, function(err, user) {
             if (err) console.error('getModTokenByUsername - getUserID', err)
             if (!user.id) {
               return reject()
             }
-            cache.createOrFindUserToken(user.id, 'messenger', ADN_SCOPES, function(token, err) {
+            cache.createOrFindUserToken(user.id, 'messenger', ADN_SCOPES, function(err, token) {
               if (err) console.error('getModTokenByUsername - createOrFindUserToken', err)
               if (!token) {
                 return reject()
@@ -220,14 +232,14 @@ const selectModToken = async (channelId) => {
   /*
   if (res.response && res.response.data === null) {
     console.log('need to create a token for this moderator')
-    cache.getUserID(modPubKey, (user, err) => {
+    cache.getUserID(modPubKey, (err, user) => {
       if (err) console.error('getUserID err', err)
       if (!user || !user.id) {
         console.warn('No such moderator user object for', modPubKey);
         // create user...
         process.exit();
       }
-      cache.createOrFindUserToken(user.id, 'messenger', ADN_SCOPES, (tokenObj, err) => {
+      cache.createOrFindUserToken(user.id, 'messenger', ADN_SCOPES, (err, tokenObj) => {
         if (err) console.error('createOrFindUserToken err', err)
         console.log('tokenObj', tokenObj);
       })
@@ -241,6 +253,7 @@ const selectModToken = async (channelId) => {
 // make our local keypair
 const ourKey = libsignal.curve.generateKeyPair();
 // encode server's pubKey in base64
+const privKey = ourKey.privKey;
 const ourPubKey64 = bb.wrap(ourKey.pubKey).toString('base64');
 const ourPubKeyHex = bb.wrap(ourKey.pubKey).toString('hex');
 console.log('running as', ourPubKeyHex);
@@ -260,7 +273,7 @@ let testInfo = {
 function getUserID(pubKey, token) {
   return new Promise((resolve, rej) => {
     if (token) cache.token = token;
-    cache.getUserID(pubKey, function(user, err, meta) {
+    cache.getUserID(pubKey, function(err, user, meta) {
       //assert.equal(200, result.statusCode);
       resolve(user && user.id);
     });
@@ -286,11 +299,28 @@ function create_message(channelId) {
         // create a dummy message
         let result;
         try {
+          const bodyObj = {
+            text: 'testing message'
+          }
+          // set up note
+            const valueObj = {
+              timestamp: parseInt(Date.now() / 1000),
+            };
+            // probably could just let this be an invalid sig so it will
+            // never show in session clients
+            //valueObj.sig = await loki_crypt.getSigData(1, privKey, valueObj, bodyObj);
+            valueObj.sig = 'garbage value'
+            valueObj.sigver = 1;
+          // put note into body
+          bodyObj.annotations = [
+            {
+              type: 'network.loki.messenger.publicChat',
+              value: valueObj
+            }
+          ];
           result = await platformApi.serverRequest('channels/1/messages', {
             method: 'POST',
-            objBody: {
-              text: 'testing message',
-            },
+            objBody: bodyObj,
           });
           //console.log('create message result', result, 'token', platformApi.token);
           if (result.statusCode === 401) {
@@ -301,6 +331,32 @@ function create_message(channelId) {
             console.log('tokenInfo', tinfo);
           }
           assert.equal(200, result.statusCode);
+          assert.ok(result.response.data.channel_id); // can't be zero!
+          assert.ok(result.response.data.entities);
+          assert.ok(result.response.data.text);
+          assert.ok(result.response.data.html);
+          assert.ok(result.response.data.user);
+          assert.ok(result.response.data.user.avatar_image);
+          // get annotation
+          const noteResult = await platformApi.serverRequest('channels/1/messages/' + result.response.data.id, {
+            params: {
+              include_annotations: 1
+            }
+          })
+          // if you're getting errors here, check above, likely failed to make it correctly
+          //console.log('noteResult', noteResult)
+          assert.equal(200, noteResult.statusCode);
+          assert.ok(noteResult.response.data);
+          assert.ok(noteResult.response.data.text === result.response.data.text);
+          assert.ok(noteResult.response.data.html === result.response.data.html);
+          assert.ok(noteResult.response.data.annotations);
+          assert.ok(noteResult.response.data.annotations[0]);
+          // validate type
+          assert.ok(noteResult.response.data.annotations[0].type === 'network.loki.messenger.publicChat');
+          // validate values
+          assert.ok(noteResult.response.data.annotations[0].value.sigver === 1);
+          assert.ok(noteResult.response.data.annotations[0].value.timestamp === valueObj.timestamp);
+          assert.ok(noteResult.response.data.annotations[0].value.sig === valueObj.sig);
         } catch (e) {
           console.error('platformApi.serverRequest err', e, result)
           return rej();
@@ -332,6 +388,11 @@ function get_message(messageId) {
 const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
   let channelId = 1; // default channel to try to test first
 
+  describe('non token tests', function() {
+    // don't need a token to test this...
+    require('./tests/homepage/homepage.js')(testInfo);
+  });
+
   // get our token
   let tokenString, userid, mod_userid;
   describe('get our token', function() {
@@ -346,6 +407,10 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       overlayApi.token = tokenString;
       platformApi.token = tokenString;
       //userid = await getUserID(ourPubKeyHex);
+    });
+
+    describe('transport tests', function() {
+      require('./tests/transport/transport.js')(testInfo);
     });
 
     // test moderator security...
@@ -401,6 +466,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       let messageId, messageId1, messageId2, messageId3, messageId4, messageId5
       it('create message to test with', async function() {
         // well we need to create a new message for moderation test
+        // we do the asserts inside create_message
         messageId = await create_message(channelId);
         messageId1 = await create_message(channelId);
         messageId2 = await create_message(channelId);
@@ -677,6 +743,9 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       });
     });
   });
+  // overlayApi.token is banned at this point...
+  // I don't think there's any need to test our nodepomf glue...
+  // I don't think I have enough time to write test for control
 }
 
 // you can't use => with mocha, you'll loose this context

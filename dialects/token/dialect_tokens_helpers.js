@@ -99,7 +99,7 @@ const findToken = (token) => {
       return res(true);
     }
     // check database
-    cache.getAPIUserToken(token, (usertoken, err) => {
+    cache.getAPIUserToken(token, (err, usertoken) => {
       if (err) {
         return rej(err);
       }
@@ -141,17 +141,18 @@ const createToken = (pubKey) => {
 
 const findOrCreateUser = (pubKey) => {
   return new Promise((res, rej) => {
-    cache.getUserID(pubKey, (user, err) => {
+    cache.getUserID(pubKey, (err, user) => {
       if (err) {
+        console.error('tokens_helper::findOrCreateUser - getUserID err', err);
         rej(err);
         return;
       }
       if (user === null) {
         // create user
         // "password" (2nd) parameter is not saved/used
-        cache.addUser(pubKey, '', (newUser, err2) => {
+        cache.addUser(pubKey, '', (err2, newUser) => {
           if (err2) {
-            console.error('addUser err', err2);
+            console.error('tokens_helper::findOrCreateUser - addUser err', err2);
             rej(err2);
           } else {
             res(newUser);
@@ -225,9 +226,10 @@ const claimToken = (pubKey, token) => {
       return rej('user');
     }
     // promote token to usable for user
-    cache.addUnconstrainedAPIUserToken(userObj.id, 'messenger', ADN_SCOPES, token, TOKEN_TTL_MINS, (tokenObj, err) => {
+    cache.addUnconstrainedAPIUserToken(userObj.id, 'messenger', ADN_SCOPES, token, TOKEN_TTL_MINS, (err, tokenObj) => {
       if (err) {
         // we'll keep the token in the temp storage, so they can retry
+        console.error('tokens_helpers::claimToken - err', err);
         return rej('tokenCreation');
       }
       // return success

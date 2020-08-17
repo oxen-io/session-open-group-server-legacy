@@ -12,6 +12,8 @@ const libsignal     = require('libsignal');
 const runMiddleware = require('run-middleware');
 const IV_LENGTH = 16;
 
+let configUtil
+
 const FILE_SERVER_PRIV_KEY_FILE = 'proxy.key'
 const FILE_SERVER_PUB_KEY_FILE = 'proxy.pub'
 
@@ -47,10 +49,12 @@ let cache;
 const sendresponse = (json, resp) => {
   const ts = Date.now();
   const diff = ts-resp.start;
-  if (diff > 1000) {
-    // this could be to do the client's connection speed
-    // how because we stop the clock before we send the response...
-    console.log(`${resp.path} served in ${ts - resp.start}ms`);
+  if (!configUtil.isQuiet()) {
+    if (diff > 1000) {
+      // this could be to do the client's connection speed
+      // how because we stop the clock before we send the response...
+      console.log(`${resp.path} served in ${ts - resp.start}ms`);
+    }
   }
   if (json.meta && json.meta.code) {
     resp.status(json.meta.code);
@@ -81,7 +85,9 @@ async function createFakeReq(req, requestObj) {
     if (contentTypeHeader && contentTypeHeader !== 'content-type' &&
         requestObj.headers[contentTypeHeader]) {
       // fix it up
-      console.log('old inner headers', requestObj.headers);
+      if (!configUtil.isQuiet()) {
+        console.log('old inner headers', requestObj.headers);
+      }
       requestObj.headers['content-type'] = requestObj.headers[contentTypeHeader];
       delete requestObj.headers[contentTypeHeader]; // remove the duplicate...
       // console.log('new inner headers', requestObj.headers);
@@ -133,10 +139,14 @@ async function createFakeReq(req, requestObj) {
       const busboy = new Busboy({ headers: requestObj.headers });
       let lastFile
       busboy.on('field', function(fieldname, val, fieldnameTruncated, valTruncated, encoding, mimetype) {
-        console.log('Field [' + fieldname + ']: value: ' + inspect(val));
+        if (!configUtil.isQuiet()) {
+          console.log('Field [' + fieldname + ']: value: ' + inspect(val));
+        }
       });
       busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
-        console.log('FUP file upload detected', fieldname, filename, encoding, mimetype)
+        if (!configUtil.isQuiet()) {
+          console.log('FUP file upload detected', fieldname, filename, encoding, mimetype)
+        }
         // file is stream but it's expecting a buffer...
 
         var buffers = [];
@@ -149,7 +159,9 @@ async function createFakeReq(req, requestObj) {
         file.on('end', function() {
           // console.log('buffers', buffers.length)
           var buffer = Buffer.concat(buffers);
-          console.log('detect file upload', buffer.length, 'bytes');
+          if (!configUtil.isQuiet()) {
+            console.log('detect file upload', buffer.length, 'bytes');
+          }
           buffers = false; // free memory
           const readableInstanceStream = new Readable({
             read() {
@@ -185,7 +197,9 @@ async function createFakeReq(req, requestObj) {
        requestObj.headers['content-type'].match(/^application\/json/i) &&
        typeof(requestObj.body) === 'string') {
       // console.log('bodyPaser failed. Outer headers', req.headers);
-      console.log('createFakeReq - bodyPaser failed');
+      if (!configUtil.isQuiet()) {
+        console.log('createFakeReq - bodyPaser failed');
+      }
       requestObj.body = JSON.parse(requestObj.body);
     }
     // non file upload
@@ -306,7 +320,7 @@ function createRes(callback) {
     return headers[x]
   }
   res.redirect = function(_code, url) {
-    console.log('res.redirect', _code, url)
+    // console.log('res.redirect', _code, url)
     if (!_.isNumber(_code)) {
       code = 301;
       url = _code;
@@ -340,7 +354,7 @@ function fixUpMiddleware(app) {
 
   // fix up runMiddleware
   app.runMiddleware = function(path, options, callback) {
-    // console.log('app.runMiddleware', path)
+    //console.log('app.runMiddleware', path)
     if (callback) callback = _.once(callback);
     if (typeof options == "function") {
       callback = options;
@@ -359,7 +373,7 @@ function fixUpMiddleware(app) {
       new_req = createReq(path, options);
     }
     new_res = createRes(callback);
-    // console.log('running', new_req.path, 'against app')
+    //console.log('running', new_req.path, 'against app')
     this(new_req, new_res);
   };
 
@@ -371,6 +385,9 @@ function fixUpMiddleware(app) {
 module.exports = (app, prefix) => {
   // set cache based on dispatcher object
   cache = app.dispatcher.cache;
+
+  // we need config-file-path set up correctly to include this
+  configUtil = require('../../server/lib/lib.config.js')
 
   // enable runMiddleware
   runMiddleware(app); // set it up for fixups
@@ -402,7 +419,9 @@ module.exports = (app, prefix) => {
 
     if (debugCryptoValues) console.log('symKey', symKey.toString('hex'), symKey.byteLength);
 
-    console.log('base64 decoding', cipherText64)
+    if (!configUtil.isQuiet()) {
+      console.log('base64 decoding', cipherText64)
+    }
 
     // base64 decode cipherText64 into buffer
     const ivAndCiphertext = Buffer.from(
@@ -422,8 +441,9 @@ module.exports = (app, prefix) => {
       }, res);
     }
 
-    console.log('decrypted', decrypted);
-
+    if (!configUtil.isQuiet()) {
+      console.log('decrypted', decrypted);
+    }
 
     sendresponse({
       ciphertext: '',
@@ -438,10 +458,14 @@ module.exports = (app, prefix) => {
 
     // this hack is to work around no json header passed
     if (Object.keys(req.body) == 0 && req.lokiReady) {
-      console.log('no json header, waiting on request to finish')
+      if (!configUtil.isQuiet()) {
+        console.log('no json header, waiting on request to finish')
+      }
       await req.lokiReady
       //console.log('overriding body with', req.originalBody)
-      console.log('request finished', req.originalBody.length.toLocaleString(), 'bytes')
+      if (!configUtil.isQuiet()) {
+        console.log('request finished', req.originalBody.length.toLocaleString(), 'bytes')
+      }
       try {
         req.body = JSON.parse(req.originalBody)
       } catch(e) {
@@ -451,7 +475,9 @@ module.exports = (app, prefix) => {
     // console.log('secure_rpc body', req.body, typeof req.body);
 
     if (!req.body || !req.body.ciphertext) {
-      console.warn('not JSON or no ciphertext', req.body);
+      if (!configUtil.isQuiet()) {
+        console.warn('not JSON or no ciphertext', req.body);
+      }
       return sendresponse({
         meta: {
           code: 400,
@@ -474,7 +500,9 @@ module.exports = (app, prefix) => {
     // console.log('ephemeralPubKeyHexIn', ephemeralPubKeyHex, ephemeralPubKeyHex.length);
 
     if (!ephemeralPubKeyHex || ephemeralPubKeyHex.length < 64) {
-      console.error('No ephemeral_key in JSON body or sent of at least 65 bytes')
+      if (!configUtil.isQuiet()) {
+        console.error('No ephemeral_key in JSON body or sent of at least 65 bytes')
+      }
       return sendresponse({
         meta: {
           code: 400,
@@ -531,7 +559,9 @@ module.exports = (app, prefix) => {
     try {
       decrypted = libloki_crypt.decryptGCM(symKey, nonceCiphertextAndTag);
     } catch(e) {
-      console.error('decryption error', e.code, e.message);
+      if (!configUtil.isQuiet()) {
+        console.error('decryption error', e.code, e.message);
+      }
       const adnResObj = {
         meta: {
           code: 400,
@@ -547,7 +577,9 @@ module.exports = (app, prefix) => {
     try {
       requestObj = JSON.parse(decrypted.toString());
     } catch(e) {
-      console.warn('Cant JSON parse', decrypted.toString());
+      if (!configUtil.isQuiet()) {
+        console.warn('Cant JSON parse', decrypted.toString());
+      }
       const adnResObj = {
         meta: {
           code: 400,
@@ -561,19 +593,25 @@ module.exports = (app, prefix) => {
     const fakeReq = await createFakeReq(req, requestObj)
 
     const diff = fakeReq.start - res.start;
-    console.log('lsrpc', fakeReq.method, fakeReq.path, 'decoding took', diff, 'ms');
+    if (!configUtil.isQuiet()) {
+      console.log('lsrpc', fakeReq.method, fakeReq.path, 'decoding took', diff, 'ms');
+    }
     fakeReq.runMiddleware(fakeReq.path, (code, resultBody, headers) => {
       // never gets here...
 
       const execStart = Date.now();
-      const execDiff = execStart - fakeReq.start;
-      console.log(fakeReq.method, fakeReq.path, 'lspc execution took', execDiff, 'ms');
-      // console.log('body', resultBody)
+      if (!configUtil.isQuiet()) {
+        const execDiff = execStart - fakeReq.start;
+        console.log(fakeReq.method, fakeReq.path, 'lspc execution took', execDiff, 'ms');
+        // console.log('body', resultBody)
+      }
 
-      return encryptResp(resultBody, code, headers);
+      encryptResp(resultBody, code, headers);
 
-      const respDiff = Date.now() - execStart;
-      console.log(fakeReq.method, fakeReq.path, 'lspc response took', respDiff, 'ms');
+      if (!configUtil.isQuiet()) {
+        const respDiff = Date.now() - execStart;
+        console.log(fakeReq.method, fakeReq.path, 'lspc response took', respDiff, 'ms');
+      }
     });
   });
 
@@ -589,6 +627,7 @@ module.exports = (app, prefix) => {
     }, res);
   });
 
+  // proxy version
   app.post(prefix + '/loki/v1/secure_rpc', async (req, res) => {
     res.start = Date.now()
     //console.log('got secure_rpc', req.path);
@@ -597,6 +636,7 @@ module.exports = (app, prefix) => {
     //console.log('secure_rpc body', req.body, typeof req.body);
 
     if (!req.body.cipherText64) {
+      console.warn('no cipherText64')
       return sendresponse({
         meta: {
           code: 400,
@@ -621,6 +661,7 @@ module.exports = (app, prefix) => {
     const ephemeralPubKey64 = req.headers['x-loki-file-server-ephemeral-key'];
     //console.log('ephemeralPubKey', ephemeralPubKey64);
     if (!ephemeralPubKey64 || ephemeralPubKey64.length < 32) {
+      console.warn('proxy ephemeralPubKey64 error', ephemeralPubKey64)
       return sendresponse({
         meta: {
           code: 400,
@@ -665,6 +706,7 @@ module.exports = (app, prefix) => {
     try {
       decrypted = await libsignal.crypto.decrypt(symKey, ciphertext, iv);
     } catch(e) {
+      console.warn('proxy decrypt error')
       return sendresponse({
         meta: {
           code: 400,
@@ -677,6 +719,7 @@ module.exports = (app, prefix) => {
     try {
       requestObj = JSON.parse(decrypted.toString());
     } catch(e) {
+      console.warn('proxy parse unencrypted error')
       sendresponse({
         meta: {
           code: 400,
@@ -686,6 +729,7 @@ module.exports = (app, prefix) => {
       return;
     }
 
+    //console.log('JSON decoded', requestObj);
     const fakeReq = await createFakeReq(req, requestObj)
 
     /*
@@ -734,12 +778,17 @@ module.exports = (app, prefix) => {
 
     // redispatch internally
     const diff = fakeReq.start - res.start;
-    console.log(fakeReq.method, fakeReq.path, 'decoding took', diff, 'ms');
+    if (!configUtil.isQuiet()) {
+      console.log(fakeReq.method, fakeReq.path, 'decoding took', diff, 'ms');
+    }
     fakeReq.runMiddleware(fakeReq.path, async (code, resultBody, headers) => {
+
       const execStart = Date.now();
-      const execDiff = execStart - fakeReq.start;
-      console.log(fakeReq.method, fakeReq.path, 'execution took', execDiff, 'ms');
-      // console.log('body', resultBody)
+      if (!configUtil.isQuiet()) {
+        const execDiff = execStart - fakeReq.start;
+        console.log(fakeReq.method, fakeReq.path, 'execution took', execDiff, 'ms');
+        // console.log('body', resultBody)
+      }
 
       const payloadData = resultBody === undefined ? Buffer.alloc(0) : Buffer.from(
         bb.wrap(resultBody).toArrayBuffer()
@@ -773,8 +822,11 @@ module.exports = (app, prefix) => {
         },
         data: cipherText64,
       }, res);
-      const respDiff = Date.now() - execStart;
-      console.log(fakeReq.method, fakeReq.path, 'response took', respDiff, 'ms');
+
+      if (!configUtil.isQuiet()) {
+        const respDiff = Date.now() - execStart;
+        console.log(fakeReq.method, fakeReq.path, 'response took', respDiff, 'ms');
+      }
     });
 
   });

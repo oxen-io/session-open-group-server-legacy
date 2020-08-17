@@ -4,6 +4,7 @@ const pathUtil = require('path');
 const fs = require('fs');
 const express = require('express');
 const lokinet = require('loki-launcher/lokinet');
+const configUtil = require('../../server/lib/lib.config.js')
 
 module.exports = (app, prefix) => {
   // set cache based on dispatcher object
@@ -22,6 +23,10 @@ module.exports = (app, prefix) => {
     lokinet.mkDirByPathSync(dir);
   }
 
+  if (configUtil.isQuiet()) {
+    process.env.NPOMF_QUIET = true;
+  }
+
   if (process.env.NPOMF_MAX_UPLOAD_SIZE === undefined) {
     // if not set, pull from nconf, else default
     process.env.NPOMF_MAX_UPLOAD_SIZE = nconf.get('limits:default:max_file_size') || 10 * 1000 * 1000; // 10mb
@@ -31,7 +36,6 @@ module.exports = (app, prefix) => {
   // it's just a better server ux, if it doesn't have know it's public virtual hosting names
   if (process.env.NPOMF_FILE_URL === undefined) {
     var diskConfig = config.getDiskConfig();
-    //console.log('storage config', diskConfig.storage)
 
     // default public url for downloading files
     process.env.NPOMF_FILE_URL = '/f';
@@ -57,12 +61,11 @@ module.exports = (app, prefix) => {
   // download is relative to nodepomf/
   //process.env.NPOMF_UPLOAD_DIRECTORY = '../files';
   var fileUploadPath = process.env.NPOMF_UPLOAD_DIRECTORY ? process.env.NPOMF_UPLOAD_DIRECTORY : 'files'
-  // console.log('relative? download path', fileUploadPath)
+
   // make sure it's an absolute path
   if (fileUploadPath[0] !== '/') {
     fileUploadPath = pathUtil.join(process.cwd(), fileUploadPath);
   }
-  // console.log('absolute path', fileUploadPath)
   if (!fs.existsSync(fileUploadPath)) {
     console.log('creating nodepomf files directory', fileUploadPath);
     lokinet.mkDirByPathSync(fileUploadPath);
@@ -75,33 +78,6 @@ module.exports = (app, prefix) => {
     req.url = prefix + '/upload';
     nodepomf(req, res);
   });
-  // NPOMF_UPLOAD_DIRECTORY is broken
-  /*
-  app.use(prefix + '/f', function(req, res) {
-    req.url = prefix + '/f' + req.url;
-    nodepomf(req, res);
-  });
-  */
 
   app.use(prefix + '/f', express.static(fileUploadPath));
-
-  // only pass through /f requests
-  /*
-  app.get(prefix + '/f', function(req, res) {
-    // redirect file from 127.0.0.1:4000
-
-    const url = 'http://127.0.0.1:4000/f/';
-
-    const request = http.get(url, function(response) {
-        const contentType = response.headers['content-type'];
-        //console.log(contentType);
-        res.setHeader('Content-Type', contentType);
-        response.pipe(res);
-    });
-
-    request.on('error', function(e){
-        console.error(e);
-    });
-  });
-  */
 }

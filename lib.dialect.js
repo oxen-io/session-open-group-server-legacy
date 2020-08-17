@@ -27,21 +27,29 @@ function sendResponse(json, resp) {
 function validUser(token, res, cb) {
   return new Promise(function(resolve, rej) {
     if (!token) {
-      return resolve(false);
+      console.error('lib.dialect::validUser - getUserClientByToken - no token', token);
+      const resObj={
+        meta: {
+          code: 401,
+          error_message: 'Authorization required'
+        }
+      };
+      sendResponse(resObj, res);
+      return resolve();
     }
-    dispatcher.getUserClientByToken(token, (usertoken, err) => {
+    dispatcher.getUserClientByToken(token, (err, usertoken) => {
       if (err) {
-        console.error('validUser token', token, 'err', err);
+        console.error('lib.dialect::validUser - getUserClientByToken err', err, 'token', token);
         const resObj={
           meta: {
             code: 500,
             error_message: err
           }
         };
-        console.error('error trying to verify token:', token);
         sendResponse(resObj, res);
         return resolve();
       }
+      //console.log('lib.dialect::validUser - usertoken', JSON.parse(JSON.stringify(usertoken)))
       if (usertoken === null) {
         // could be they didn't log in through a server restart
         const resObj={
@@ -50,7 +58,7 @@ function validUser(token, res, cb) {
             error_message: "Call requires authentication: Authentication required to fetch token."
           }
         };
-        console.error('token does not exist:', token);
+        console.error('lib.dialect::validUser - token does not exist:', token);
         sendResponse(resObj, res);
         return resolve();
       }

@@ -9,10 +9,11 @@ const setup = (utilties) => {
 // not currently used
 const getUser = (userid) => {
   return new Promise((res, rej) => {
-    cache.getUser(userid, (user, err) => {
+    cache.getUser(userid, (err, user) => {
       if (user) {
         res(user);
       } else {
+        console.error('moderation_helpers::getUser - err', err)
         rej(err);
       }
     });
@@ -37,8 +38,9 @@ const getUsers = async (userids) => {
     // handle integer lookups
     if (intList.length) {
       promises.push(new Promise( (resolve, reject) => {
-        cache.getUsers(intList, { pageParams: { count: 200 } }, (users, err) => {
+        cache.getUsers(intList, { pageParams: { count: 200 } }, (err, users) => {
           if (err) {
+            console.error('moderation_helpers::getUsers - err', err);
             return reject(err);
           }
           results = results.concat(users);
@@ -50,8 +52,9 @@ const getUsers = async (userids) => {
     // handle username lookups
     userList.forEach(username => {
       promises.push(new Promise((resolve, reject) => {
-        cache.getUserID(username, (userObj, err) => {
+        cache.getUserID(username, (err, userObj) => {
           if (err) {
+            console.error('moderation_helpers::getUsers - getUserID err', err);
             return reject(err);
           }
           // don't add null
@@ -65,7 +68,6 @@ const getUsers = async (userids) => {
 
     next200 = userids.splice(0, 200);
   }
-  // console.log('getUsers awaiting', promises.length, 'promises for', count, 'user object lookups');
   await Promise.all(promises);
   return results; // array of model constructors
 };
@@ -97,7 +99,7 @@ const validGlobal = (token, res, cb) => {
 const deleteMessage = (msg) => {
   return new Promise((resolve, rej) => {
     // carry out deletion
-    cache.deleteMessage(msg.id, msg.channel_id, (message, delErr) => {
+    cache.deleteMessage(msg.id, msg.channel_id, (delErr, message) => {
       // handle errors
       if (delErr) {
         console.error('tryDeleteMessage mod deleteMessage err', delErr);
@@ -124,28 +126,30 @@ const deleteMessage = (msg) => {
 // return messages in db format
 const getMessages = (ids) => {
   return new Promise((resolve, rej) => {
-    cache.getMessage(ids, (messages, getErr) => {
+    //console.log('moderationHelper::getMessages - asking for', ids)
+    cache.getMessage(ids, { generalParams: {} }, (getErr, messages) => {
       // handle errors
       if (getErr) {
         console.error('getMessage err', getErr);
-        return resolve([500, getErr, false]);
+        return resolve([getErr, 500, false]);
       }
 
       if (!messages || !messages.length) {
-        return resolve([410, 'no messages', false]);
+        return resolve([false, 410, []]);
       }
       // single result
       if (!Array.isArray(messages)) {
         messages = [messages];
       }
-      resolve([200, false, messages]);
+      resolve([false, 200, messages]);
     })
   });
 };
 
 const modTryDeleteMessages = async (ids, access_list) => {
-  const [ code, err, messages ] = await getMessages(ids);
+  const [ err, code, messages ] = await getMessages(ids);
   if (err) {
+    console.error('modTryDeleteMessages err', err)
     const resObj = {
       meta: {
         code,

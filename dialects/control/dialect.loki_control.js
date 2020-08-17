@@ -5,23 +5,23 @@ const overlay  = require('../../lib.overlay');
 const allowedEndpoints = {
   get: [
     // '/token', // used for ??
-    '/channels/1',
-    '/channels/1/messages',
+    //'/channels/1',
+    //'/channels/1/messages',
   ],
   post: [
     '/files',
-    '/channels/1/messages',
-    '/channels/1/subscribe',
+    //'/channels/1/messages',
+    //'/channels/1/subscribe',
   ],
   put: [
     '/users/me',
-    '/channels/1',
+    //'/channels/1',
   ],
   patch: [
     '/users/me'
   ],
   delete: [
-    '/channels/1/subscribe',
+    //'/channels/1/subscribe',
   ],
 }
 
@@ -122,13 +122,46 @@ module.exports = (app, prefix) => {
       }));
     }
     let ok = true;
+
     // check non-dynamic
     if (!allowedEndpoints[req.method.toLowerCase()].includes(req.path.toLowerCase())) {
       ok = false;
     }
 
+    // need this for create_message unit tests
+    // get channels/X
+    // get channels/X/messages
+    if (req.method.toLowerCase() === 'get' && req.path.match(/^\/channels\//i)) {
+      ok = true;
+    }
+    // allow users to delete their own messages
+    // delete channels/X/messages/1
+    // delete channels/X/subscribe
+    if (req.method.toLowerCase() === 'delete' && req.path.match(/^\/channels\//i) &&
+      (req.path.match(/\/messages\//i) || req.path.match(/\/subscribe/i))) {
+      ok = true;
+    }
+
+    // update meta data
+    // put channels/X
+    if (req.method.toLowerCase() === 'put' && req.path.match(/^\/channels\//i)) {
+      ok = true;
+    }
+    // post sub/msgs
+    // post channels/X/messages
+    // post channels/X/subscribe
+    if (req.method.toLowerCase() === 'post' && req.path.match(/^\/channels\//i) &&
+      (req.path.match(/\/messages/i) || req.path.match(/\/subscribe/i))) {
+      ok = true;
+    }
+
     // allow user look ups (but with a token, that check is done later)
     if (req.method.toLowerCase() === 'get' && req.path.match(/^\/users\//i)) {
+      ok = true;
+    }
+
+    // need this for transpot unit tests
+    if (req.method.toLowerCase() === 'get' && req.path === '/users') {
       ok = true;
     }
 
@@ -166,7 +199,7 @@ module.exports = (app, prefix) => {
     // if valid URL
     if (req.token) {
       // get pubKey from token...
-      cache.getAPIUserToken(req.token, async function(usertoken, err) {
+      cache.getAPIUserToken(req.token, async function(err, usertoken) {
         if (err) {
           console.error('control middleware getAPIUserToken err', err);
         }

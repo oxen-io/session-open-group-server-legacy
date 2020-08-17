@@ -1,6 +1,7 @@
 [submodule "server"]
 	path = server
 	url = https://gitgud.io/Sapphire/Tavrn/sapphire-platform-server.git
+	branch = refactor
 [submodule "docker/wait-for-it"]
 	path = docker/wait-for-it
 	url = https://github.com/vishnubob/wait-for-it.git
