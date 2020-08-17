@@ -21,6 +21,10 @@ const config_path = path.join(__dirname, '/../config.json');
 nconf.argv().env('__').file({file: config_path});
 console.log('test config_path', config_path);
 
+// set this no matter what
+// libraries will need it to be correct too
+process.env['config-file-path'] = config_path
+
 const webport = nconf.get('web:port') || 7070;
 const webbind = nconf.get('web:listen') || '127.0.0.1';
 const webclient = webbind !== '0.0.0.0' ? webbind : '127.0.0.1';
@@ -94,9 +98,9 @@ const ensureUnifiedServer = () => {
     console.log('unified port', webport);
     lokinet.portIsFree(webbind, webport, function(free) {
       //console.log(webbind + ':' + webport, 'free', free);
+
       if (free) {
         // make sure we use the same config...
-        process.env['config-file-path'] = config_path
         process.env['admin:modKey'] = 'JustMakingSureThisIsEnabled';
         hasAdminAPI = true;
         startPlatform = require('../server/app');
