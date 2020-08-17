@@ -354,7 +354,7 @@ function fixUpMiddleware(app) {
 
   // fix up runMiddleware
   app.runMiddleware = function(path, options, callback) {
-    // console.log('app.runMiddleware', path)
+    //console.log('app.runMiddleware', path)
     if (callback) callback = _.once(callback);
     if (typeof options == "function") {
       callback = options;
@@ -373,7 +373,7 @@ function fixUpMiddleware(app) {
       new_req = createReq(path, options);
     }
     new_res = createRes(callback);
-    // console.log('running', new_req.path, 'against app')
+    //console.log('running', new_req.path, 'against app')
     this(new_req, new_res);
   };
 
@@ -624,6 +624,7 @@ module.exports = (app, prefix) => {
     }, res);
   });
 
+  // proxy version
   app.post(prefix + '/loki/v1/secure_rpc', async (req, res) => {
     res.start = Date.now()
     //console.log('got secure_rpc', req.path);
@@ -632,6 +633,7 @@ module.exports = (app, prefix) => {
     //console.log('secure_rpc body', req.body, typeof req.body);
 
     if (!req.body.cipherText64) {
+      console.warn('no cipherText64')
       return sendresponse({
         meta: {
           code: 400,
@@ -656,6 +658,7 @@ module.exports = (app, prefix) => {
     const ephemeralPubKey64 = req.headers['x-loki-file-server-ephemeral-key'];
     //console.log('ephemeralPubKey', ephemeralPubKey64);
     if (!ephemeralPubKey64 || ephemeralPubKey64.length < 32) {
+      console.warn('proxy ephemeralPubKey64 error', ephemeralPubKey64)
       return sendresponse({
         meta: {
           code: 400,
@@ -700,6 +703,7 @@ module.exports = (app, prefix) => {
     try {
       decrypted = await libsignal.crypto.decrypt(symKey, ciphertext, iv);
     } catch(e) {
+      console.warn('proxy decrypt error')
       return sendresponse({
         meta: {
           code: 400,
@@ -712,6 +716,7 @@ module.exports = (app, prefix) => {
     try {
       requestObj = JSON.parse(decrypted.toString());
     } catch(e) {
+      console.warn('proxy parse unencrypted error')
       sendresponse({
         meta: {
           code: 400,
@@ -721,6 +726,7 @@ module.exports = (app, prefix) => {
       return;
     }
 
+    //console.log('JSON decoded', requestObj);
     const fakeReq = await createFakeReq(req, requestObj)
 
     /*
