@@ -142,6 +142,11 @@ module.exports = (app, prefix) => {
       ok = true;
     }
 
+    // allow users to delete their own messages
+    if (req.method.toLowerCase() === 'delete' && req.path.match(/^\/channels\//i) && req.path.match(/\/messages\//i)) {
+      ok = true;
+    }
+
     // GET /token is valid, if you're passing a token...
     if (req.method.toLowerCase() === 'get' && req.path.match(/^\/token/i)) {
       ok = true;
