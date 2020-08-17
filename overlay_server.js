@@ -1,11 +1,13 @@
+const path = require('path')
+
 if (process.env['config-file-path'] === undefined) {
-  process.env['config-file-path'] = 'config.json';
+  process.env['config-file-path'] = path.join(__dirname, 'config.json');
 }
 const loki_middlewares = require('./middlewares.js');
 const platform_middlewares = require('./server/middlewares.js');
 const apps = require('./server/app.js');
 
-const enableDebug = false
+const enableDebug = !!process.env['DEBUG']
 if (enableDebug) {
   apps.publicApp.use(platform_middlewares.debugMiddleware);
   // Express 4.x specific
