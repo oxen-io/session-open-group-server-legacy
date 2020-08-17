@@ -126,7 +126,8 @@ const deleteMessage = (msg) => {
 // return messages in db format
 const getMessages = (ids) => {
   return new Promise((resolve, rej) => {
-    cache.getMessage(ids, (getErr, messages) => {
+    //console.log('moderationHelper::getMessages - asking for', ids)
+    cache.getMessage(ids, { generalParams: {} }, (getErr, messages) => {
       // handle errors
       if (getErr) {
         console.error('getMessage err', getErr);
