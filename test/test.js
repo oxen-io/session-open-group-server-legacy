@@ -66,7 +66,10 @@ proxyAdmin.dispatcher = {
     cb(false, user);
   },
   // ignore local message updates
-  setMessage: (message, cb) => { if (cb) cb(false, message); },
+  setMessage: (message, cb) => {
+    console.log('test.js::proxyAdmin.dispatcher.setMessage', message)
+    if (cb) cb(false, message);
+  },
 }
 // backward compatible
 if (proxyAdmin.start) {
@@ -324,6 +327,7 @@ function create_message(channelId) {
             console.log('tokenInfo', tinfo);
           }
           assert.equal(200, result.statusCode);
+          assert.ok(result.response.data.channel_id); // can't be zero!
           assert.ok(result.response.data.entities);
           assert.ok(result.response.data.text);
           assert.ok(result.response.data.html);
@@ -335,6 +339,8 @@ function create_message(channelId) {
               include_annotations: 1
             }
           })
+          // if you're getting errors here, check above, likely failed to make it correctly
+          //console.log('noteResult', noteResult)
           assert.equal(200, noteResult.statusCode);
           assert.ok(noteResult.response.data);
           assert.ok(noteResult.response.data.text === result.response.data.text);
