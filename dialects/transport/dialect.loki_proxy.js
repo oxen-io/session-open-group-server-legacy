@@ -12,7 +12,7 @@ const libsignal     = require('libsignal');
 const runMiddleware = require('run-middleware');
 const IV_LENGTH = 16;
 
-const configUtil = require('../../server/lib/lib.config.js')
+let configUtil
 
 const FILE_SERVER_PRIV_KEY_FILE = 'proxy.key'
 const FILE_SERVER_PUB_KEY_FILE = 'proxy.pub'
@@ -385,6 +385,9 @@ function fixUpMiddleware(app) {
 module.exports = (app, prefix) => {
   // set cache based on dispatcher object
   cache = app.dispatcher.cache;
+
+  // we need config-file-path set up correctly to include this
+  configUtil = require('../../server/lib/lib.config.js')
 
   // enable runMiddleware
   runMiddleware(app); // set it up for fixups
