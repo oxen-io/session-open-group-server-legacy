@@ -450,11 +450,188 @@ module.exports = (app, prefix) => {
     }, res);
   });
 
-  app.post(prefix + '/loki/v1/lsrpc', async (req, res) => {
-    // console.log('loki/v1/lsrpc - start', typeof(req.body))
+  function parseBodyPlusJSON(blob) {
 
-    //console.log('headers', req.headers);
-    //console.log('req.originalBody', req.originalBody);
+    try {
+
+      let view = new DataView(blob.buffer);
+      let len = view.getUint32(0, true);
+
+      let payload = blob.subarray(4, len + 4);
+
+      let json_payload = blob.subarray(4 + len);
+      let decoder = new TextDecoder("utf-8");
+      let json_str = decoder.decode(json_payload);
+
+
+      return {
+        body: payload,
+        json: JSON.parse(json_str)
+      }
+
+    } catch (err) {
+      console.log("Error parsing body: ", err);
+    }
+  }
+
+  function parse_v2_onions(blob) {
+
+    let { body, json } = parseBodyPlusJSON(blob);
+
+    json.ciphertext = body;
+
+    return json;
+  }
+
+
+  function derive_onion_key(ephemeralPubKeyHex) {
+
+    if (!ephemeralPubKeyHex || ephemeralPubKeyHex.length < 64) {
+      if (!configUtil.isQuiet()) {
+        console.error('No ephemeral_key in JSON body or sent of at least 65 bytes');
+      }
+      throw new Error('No ephemeral_key in JSON body or sent of at least 65 bytes');
+    }
+
+    // decode hex ephemeral key into buffer
+    // FIXME: needs a try/catch
+    const ephemeralPubKey = Buffer.from(
+      bb.wrap(ephemeralPubKeyHex,'hex').toArrayBuffer()
+    );
+
+    // build symmetrical keypair mix client pub key with server priv key
+    const sym_key = libloki_crypt.makeSymmetricKey(serverPrivKey, ephemeralPubKey);
+
+    return sym_key
+
+  }
+
+  /// Returns request object
+  function decrypt_onion_req(ciphertext, shared_key) {
+
+    let decrypted;
+    try {
+      decrypted = libloki_crypt.decryptGCM(shared_key, ciphertext);
+    } catch(e) {
+      console.error('decryption error', e.code, e.message);
+      throw e;
+    }
+
+    let requestObj;
+    try {
+      requestObj = JSON.parse(decrypted.toString());
+    } catch (e) {
+      if (!configUtil.isQuiet()) {
+        console.warn('Could not parse JSON', decrypted.toString(), e);
+      }
+      throw e;
+    }
+
+    return requestObj;
+  }
+
+  async function process_onion_request(req, res, ciphertext, ephemeral_key) {
+
+    let shared_key;
+
+    try {
+      shared_key = derive_onion_key(ephemeral_key);
+    } catch (e) {
+
+      // Not able to encrypt response at this point
+      sendresponse({
+        meta: {
+          code: 400,
+          error: e.message,
+          headers: req.headers,
+          body: req.body,
+        },
+      }, res);
+
+      return;
+
+    }
+
+    try {
+
+      let req_obj = decrypt_onion_req(ciphertext, shared_key);
+
+      await process_onion_post_decryption(res, req, shared_key, req_obj);
+
+    } catch (e) {
+
+      const code = 400;
+
+      const adnResObj = {
+        meta: {
+          code,
+          error: e.code + ' '  + e.messsage
+        },
+      }
+      res.end(encryptResp(JSON.stringify(adnResObj), shared_key, code));
+
+    }
+
+
+  }
+
+  app.post(prefix + '/loki/v2/lsrpc', async (req, res) => {
+
+    // this hack is to work around no json header passed
+    await req.lokiReady;
+
+    let array = new Uint8Array(req.originalBody);
+
+    let body = parse_v2_onions(array);
+
+    await process_onion_request(req, res, body.ciphertext, body.ephemeral_key);
+
+  });
+
+  // Returns ciphertext in base64
+  function encryptResp(resultBody, symKey, code = 200, headers = {}) {
+    // encryptGCM handles the textEncoder
+    const plaintextEnc = JSON.stringify({
+      body: resultBody,
+      headers: headers,
+      status: code
+    });
+
+    const cipheredBuffer = libloki_crypt.encryptGCM(symKey, plaintextEnc);
+
+    // convert final buffer to base64
+    const cipherText64 = bb.wrap(cipheredBuffer).toString('base64');
+    return cipherText64;
+  }
+
+  async function process_onion_post_decryption(res, req, shared_key, requestObj) {
+
+    const fakeReq = await createFakeReq(req, requestObj)
+
+    const diff = fakeReq.start - res.start;
+    if (!configUtil.isQuiet()) {
+      console.log('lsrpc', fakeReq.method, fakeReq.path, 'decoding took', diff, 'ms');
+    }
+    fakeReq.runMiddleware(fakeReq.path, (code, resultBody, headers) => {
+      // never gets here...
+
+      const execStart = Date.now();
+      if (!configUtil.isQuiet()) {
+        const execDiff = execStart - fakeReq.start;
+        console.log(fakeReq.method, fakeReq.path, 'lspc execution took', execDiff, 'ms');
+        // console.log('body', resultBody)
+      }
+
+      res.end(encryptResp(resultBody, shared_key, code, headers));
+
+      if (!configUtil.isQuiet()) {
+        const respDiff = Date.now() - execStart;
+        console.log(fakeReq.method, fakeReq.path, 'lspc response took', respDiff, 'ms');
+      }
+    });
+  }
+
+  app.post(prefix + '/loki/v1/lsrpc', async (req, res) => {
 
     // this hack is to work around no json header passed
     if (Object.keys(req.body) == 0 && req.lokiReady) {
@@ -488,131 +665,15 @@ module.exports = (app, prefix) => {
       }, res);
     }
 
-    // after we get our bearings
-    // get the base64 body...
-    const cipherText64 = req.body.ciphertext; // snode uses ciphertext
-    const debugHeaders = req.headers['x-loki-debug-headers'];
-    const debugCryptoValues = req.headers['x-loki-debug-crypto-values'];
-    const debugPayload = req.headers['x-loki-debug-payload'];
-    const debugFup = req.headers['x-loki-debug-file-upload'];
-
-    let ephemeralPubKeyHex = req.body.ephemeral_key;
-    // console.log('ephemeralPubKeyHexIn', ephemeralPubKeyHex, ephemeralPubKeyHex.length);
-
-    if (!ephemeralPubKeyHex || ephemeralPubKeyHex.length < 64) {
-      if (!configUtil.isQuiet()) {
-        console.error('No ephemeral_key in JSON body or sent of at least 65 bytes')
-      }
-      return sendresponse({
-        meta: {
-          code: 400,
-          error: "No ephemeral_key in JSON body or sent of at least 65 bytes",
-          headers: req.headers,
-          body: req.body,
-        },
-      }, res);
-    }
-
-    // decode hex ephemeral key into buffer
-    // FIXME: needs a try/catch
-    const ephemeralPubKey = Buffer.from(
-      bb.wrap(ephemeralPubKeyHex,'hex').toArrayBuffer()
-    );
-
-    if (debugCryptoValues) console.log('private    key', serverPrivKey.toString('hex'))
-    if (debugCryptoValues) console.log('ephemeral  key', ephemeralPubKey.toString('hex'))
-
-    // build symmetrical keypair mix client pub key with server priv key
-    const symKey = libloki_crypt.makeSymmetricKey(serverPrivKey, ephemeralPubKey)
-
-    if (debugCryptoValues) console.log('symKeySF  ', symKey.toString('hex'), symKey.byteLength);
-
-    //console.log('base64 decoding', cipherText64)
-
+    
+    const cipherText64 = req.body.ciphertext;
     // base64 decode cipherText64 into buffer
-    const nonceCiphertextAndTag = Buffer.from(
+    const ciphertext = Buffer.from(
       bb.wrap(cipherText64, 'base64').toArrayBuffer()
     );
 
-    if (debugCryptoValues) console.log('nonceCiphertextAndTag', nonceCiphertextAndTag.toString('hex'))
+    await process_onion_request(req, res, ciphertext, req.body.ephemeral_key);
 
-    // captures res, symKey
-    function encryptResp(resultBody, code = 200, headers = {}) {
-      // encryptGCM handles the textEncoder
-      const plaintextEnc = JSON.stringify({
-        body: resultBody,
-        headers: headers,
-        status: code
-      });
-      //console.log('encryptResp - plaintextEnc', plaintextEnc)
-      //console.log('symKey components', ephemeralPubKey.toString('hex'), serverPrivKey.toString('hex'))
-      //console.log('response symKey', symKey.toString('hex'), plaintextEnc.toString('hex'), plaintextEnc)
-      const cipheredBuffer = libloki_crypt.encryptGCM(symKey, plaintextEnc);
-      //console.log('response encObj.cipheredBuffer', cipheredBuffer.toString('hex'))
-
-      // convert final buffer to base64
-      const cipherText64 = bb.wrap(cipheredBuffer).toString('base64');
-      res.end(cipherText64);
-    }
-
-    let decrypted = '{}';
-    try {
-      decrypted = libloki_crypt.decryptGCM(symKey, nonceCiphertextAndTag);
-    } catch(e) {
-      if (!configUtil.isQuiet()) {
-        console.error('decryption error', e.code, e.message);
-      }
-      const adnResObj = {
-        meta: {
-          code: 400,
-          error: e.code + ' '  + e.messsage
-        },
-      }
-      return encryptResp(JSON.stringify(adnResObj), adnResObj.meta.code);
-    }
-
-    if (debugPayload) console.log('decrypted', decrypted);
-
-    let requestObj;
-    try {
-      requestObj = JSON.parse(decrypted.toString());
-    } catch(e) {
-      if (!configUtil.isQuiet()) {
-        console.warn('Cant JSON parse', decrypted.toString());
-      }
-      const adnResObj = {
-        meta: {
-          code: 400,
-          error: e.code + ' '  + e.messsage
-        },
-      }
-      return encryptResp(JSON.stringify(adnResObj), adnResObj.meta.code);
-    }
-    if (debugPayload) console.log('JSON decoded', requestObj);
-
-    const fakeReq = await createFakeReq(req, requestObj)
-
-    const diff = fakeReq.start - res.start;
-    if (!configUtil.isQuiet()) {
-      console.log('lsrpc', fakeReq.method, fakeReq.path, 'decoding took', diff, 'ms');
-    }
-    fakeReq.runMiddleware(fakeReq.path, (code, resultBody, headers) => {
-      // never gets here...
-
-      const execStart = Date.now();
-      if (!configUtil.isQuiet()) {
-        const execDiff = execStart - fakeReq.start;
-        console.log(fakeReq.method, fakeReq.path, 'lspc execution took', execDiff, 'ms');
-        // console.log('body', resultBody)
-      }
-
-      encryptResp(resultBody, code, headers);
-
-      if (!configUtil.isQuiet()) {
-        const respDiff = Date.now() - execStart;
-        console.log(fakeReq.method, fakeReq.path, 'lspc response took', respDiff, 'ms');
-      }
-    });
   });
 
   app.post(prefix + '/loki/v1/secure_rpc_debug', async (req, res) => {
@@ -630,7 +691,7 @@ module.exports = (app, prefix) => {
   // proxy version
   app.post(prefix + '/loki/v1/secure_rpc', async (req, res) => {
     res.start = Date.now()
-    //console.log('got secure_rpc', req.path);
+    // console.log('got secure_rpc', req.path);
     // should have debug asks and ephermal key
     //console.log('headers', req.headers);
     //console.log('secure_rpc body', req.body, typeof req.body);
