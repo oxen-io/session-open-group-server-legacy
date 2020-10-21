@@ -29,11 +29,15 @@ function snodeOnionMiddleware(req, res, next) {
     });
 
     let buffer = new ByteBuffer(ByteBuffer.DEFAULT_CAPACITY, true);
-      req.on('data', function (data) {
-          buffer.append(data);
-      });
-      req.on('end', function() {
-      // reset buffer's offset and set limit to capacity (method's name is misleading imo)
+
+    let size = 0;
+    req.on('data', function (data) {
+      size += data.length;
+      buffer.append(data);
+    });
+    req.on('end', function() {
+      // reset buffer's offset and set limit to capacity
+      buffer.compact(0, size);
       buffer.clear();
       req.originalBody = buffer.toArrayBuffer();
       resolver(); // resolve promise

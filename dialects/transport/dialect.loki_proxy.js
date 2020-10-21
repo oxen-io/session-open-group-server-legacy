@@ -18,7 +18,6 @@ const FILE_SERVER_PRIV_KEY_FILE = 'proxy.key'
 const FILE_SERVER_PUB_KEY_FILE = 'proxy.pub'
 
 const libloki_crypt = require('./lib.loki_crypt');
-const { json } = require('body-parser');
 
 console.log('dialect.loki_proxy - initializing loki_proxy subsystem');
 if (!fs.existsSync(FILE_SERVER_PRIV_KEY_FILE)) {
@@ -451,29 +450,37 @@ module.exports = (app, prefix) => {
     }, res);
   });
 
-  function parse_v2_onions(body) {
+  function parseBodyPlusJSON(blob) {
 
     try {
 
-      let view = new DataView(body.buffer);
+      let view = new DataView(blob.buffer);
       let len = view.getUint32(0, true);
 
-      let payload = body.subarray(4, len + 4);
+      let payload = blob.subarray(4, len + 4);
 
-      let json_payload = body.subarray(4 + len);
+      let json_payload = blob.subarray(4 + len);
       let decoder = new TextDecoder("utf-8");
       let json_str = decoder.decode(json_payload);
 
-      let params = JSON.parse(json_str);
 
-      params.ciphertext = payload;
-
-      return params;
+      return {
+        body: payload,
+        json: JSON.parse(json_str)
+      }
 
     } catch (err) {
       console.log("Error parsing body: ", err);
     }
+  }
 
+  function parse_v2_onions(blob) {
+
+    let { body, json } = parseBodyPlusJSON(blob);
+
+    json.ciphertext = body;
+
+    return json;
   }
 
 
@@ -513,9 +520,9 @@ module.exports = (app, prefix) => {
     let requestObj;
     try {
       requestObj = JSON.parse(decrypted.toString());
-    } catch(e) {
+    } catch (e) {
       if (!configUtil.isQuiet()) {
-        console.warn('Cant JSON parse', decrypted.toString());
+        console.warn('Could not parse JSON', decrypted.toString(), e);
       }
       throw e;
     }
@@ -577,7 +584,7 @@ module.exports = (app, prefix) => {
 
     let body = parse_v2_onions(array);
 
-    await process_onion_request(req, res, body,ciphertext, body.ephemeral_key);
+    await process_onion_request(req, res, body.ciphertext, body.ephemeral_key);
 
   });
 
