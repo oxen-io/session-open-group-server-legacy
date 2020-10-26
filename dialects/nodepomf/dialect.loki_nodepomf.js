@@ -80,4 +80,12 @@ module.exports = (app, prefix) => {
   });
 
   app.use(prefix + '/f', express.static(fileUploadPath));
+
+  app.use(prefix + '/loki/v1/f/:file', function(req, res) {
+    const safePath = req.params.file.replace(/[\.\/]/g, '');
+    const buf = fs.readFileSync('files/' + safePath);
+    res.type('application/octet-stream');
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.end(buf);
+  });
 }
