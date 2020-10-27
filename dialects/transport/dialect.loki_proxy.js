@@ -403,6 +403,16 @@ module.exports = (app, prefix) => {
     }, res);
   });
 
+  app.get(prefix + '/loki/v2/lsrpc', (req, res) => {
+
+    console.error("Processing a dummy GET /loki/v2/lsrpc");
+
+    sendresponse({
+      ciphertext: '',
+    }, res);
+
+  });
+
   app.get(prefix + '/loki/v1/lsrpc', (req, res) => {
     res.start = Date.now()
     var ephemeralPubKeyHex = ''
