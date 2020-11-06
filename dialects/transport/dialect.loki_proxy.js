@@ -540,7 +540,7 @@ module.exports = (app, prefix) => {
     return requestObj;
   }
 
-  async function process_onion_request(req, res, ciphertext, ephemeral_key) {
+  async function process_onion_request(req, res, ciphertext, ephemeral_key, compactRes = false) {
 
     let shared_key;
 
@@ -566,7 +566,7 @@ module.exports = (app, prefix) => {
 
       let req_obj = decrypt_onion_req(ciphertext, shared_key);
 
-      await process_onion_post_decryption(res, req, shared_key, req_obj);
+      await process_onion_post_decryption(res, req, shared_key, req_obj, compactRes);
 
     } catch (e) {
 
@@ -598,6 +598,22 @@ module.exports = (app, prefix) => {
 
   });
 
+  app.post(prefix + '/loki/v3/lsrpc', async (req, res) => {
+
+    // this hack is to work around no json header passed
+    await req.lokiReady;
+
+    let array = new Uint8Array(req.originalBody);
+
+    let body = parse_v2_onions(array);
+
+    // v3 endpoint uses a more compact (base64) encoding for files
+    const compactRes = true;
+
+    await process_onion_request(req, res, body.ciphertext, body.ephemeral_key, compactRes);
+
+  })
+
   // Returns ciphertext in base64
   function encryptResp(resultBody, symKey, code = 200, headers = {}) {
     // encryptGCM handles the textEncoder
@@ -614,7 +630,44 @@ module.exports = (app, prefix) => {
     return cipherText64;
   }
 
-  async function process_onion_post_decryption(res, req, shared_key, requestObj) {
+  function encryptStringResp(responseStr, symKey) {
+
+    const cipheredBuffer = libloki_crypt.encryptGCM(symKey, responseStr);
+
+    // convert final buffer to base64
+    const cipherText64 = bb.wrap(cipheredBuffer).toString('base64');
+
+    return cipherText64;
+  }
+
+  // Will return the original body if can't decode
+  function decodeFileBody(resultBody) {
+
+    if (!Buffer.isBuffer(resultBody)) {
+      console.error("resultBody is NOT Buffer");
+      return resultBody;
+    }
+
+    let bodyBase64 = bb.wrap(resultBody.buffer).toString('base64');
+
+    return bodyBase64;
+  }
+
+  function encryptRespV2(resultBody, symKey, code = 200, headers = {}) {
+
+    let body = decodeFileBody(resultBody);
+
+    let plaintextEnc = JSON.stringify({
+        body: body,
+        headers: headers,
+        status: code
+      });
+
+    return encryptStringResp(plaintextEnc, symKey);
+
+  }
+
+  async function process_onion_post_decryption(res, req, shared_key, requestObj, compactRes) {
 
     const fakeReq = await createFakeReq(req, requestObj)
 
@@ -632,7 +685,18 @@ module.exports = (app, prefix) => {
         // console.log('body', resultBody)
       }
 
-      res.end(encryptResp(resultBody, shared_key, code, headers));
+      /// A bit of a hack to recognise file download requests:
+      const isFileDownload = fakeReq.path.substr(0, 10) === "/loki/v1/f";
+
+      let response;
+
+      if (compactRes && isFileDownload) {
+        response = encryptRespV2(resultBody, shared_key, code, headers);
+      } else {
+        response = encryptResp(resultBody, shared_key, code, headers);
+      }
+
+      res.end(response);
 
       if (!configUtil.isQuiet()) {
         const respDiff = Date.now() - execStart;
