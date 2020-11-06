@@ -81,11 +81,30 @@ module.exports = (app, prefix) => {
 
   app.use(prefix + '/f', express.static(fileUploadPath));
 
-  app.use(prefix + '/loki/v1/f/:file', function(req, res) {
-    const safePath = req.params.file.replace(/[\.\/]/g, '');
-    const buf = fs.readFileSync('files/' + safePath);
-    res.type('application/octet-stream');
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.end(buf);
-  });
+  /// ************************************************
+  /// The endpoint bellow is messy... It seems to be important
+  /// for open groups, but breaks private conversations? (where
+  /// this server is used as a submodule)
+  /// ************************************************
+
+  // app.use(prefix + '/loki/v1/f/:file', function(req, res) {
+  //   const safePath = req.params.file.replace(/[\.\/]/g, '');
+
+  //   try {
+  //     const buf = fs.readFileSync('files/' + safePath);
+
+  //     /// NOTE: attachments in private conversations are saved under
+  //     /// `/root/nodepomf/files/` (not in `files/` relative to current dir)
+
+  //     // const buf = fs.readFileSync('/root/nodepomf/files/' + safePath);
+  //     res.type('application/octet-stream');
+  //     res.setHeader("Access-Control-Allow-Origin", "*");
+  //     res.end(buf);
+
+  //   } catch (err) {
+
+  //     console.error("Could not load file: ", err);
+  //     res.end("Could not open file");
+  //   }
+  // });
 }

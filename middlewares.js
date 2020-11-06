@@ -21,7 +21,7 @@ function snodeOnionMiddleware(req, res, next) {
       // console.log('perserved', body);
       resolver(); // resolve promise
     });
-  } else if (req.method === 'POST' && req.path === '/loki/v2/lsrpc') {
+  } else if (req.method === 'POST' && (req.path === '/loki/v2/lsrpc' || req.path === '/loki/v3/lsrpc') ) {
 
     let resolver;
     req.lokiReady = new Promise(res => {
