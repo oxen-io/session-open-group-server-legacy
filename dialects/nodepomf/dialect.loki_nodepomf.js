@@ -87,24 +87,24 @@ module.exports = (app, prefix) => {
   /// this server is used as a submodule)
   /// ************************************************
 
-  // app.use(prefix + '/loki/v1/f/:file', function(req, res) {
-  //   const safePath = req.params.file.replace(/[\.\/]/g, '');
+  app.use(prefix + '/loki/v1/f/:file', function(req, res) {
+    const safePath = req.params.file.replace(/[\.\/]/g, '');
 
-  //   try {
-  //     const buf = fs.readFileSync('files/' + safePath);
+    try {
+      const buf = fs.readFileSync('files/' + safePath);
 
-  //     /// NOTE: attachments in private conversations are saved under
-  //     /// `/root/nodepomf/files/` (not in `files/` relative to current dir)
+      /// NOTE: attachments in private conversations are saved under
+      /// `/root/nodepomf/files/` (not in `files/` relative to current dir)
 
-  //     // const buf = fs.readFileSync('/root/nodepomf/files/' + safePath);
-  //     res.type('application/octet-stream');
-  //     res.setHeader("Access-Control-Allow-Origin", "*");
-  //     res.end(buf);
+      // const buf = fs.readFileSync('/root/nodepomf/files/' + safePath);
+      res.type('application/octet-stream');
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.end(buf);
 
-  //   } catch (err) {
+    } catch (err) {
 
-  //     console.error("Could not load file: ", err);
-  //     res.end("Could not open file");
-  //   }
-  // });
+      console.error("Could not load file: ", err);
+      res.end("Could not open file");
+    }
+  });
 }
