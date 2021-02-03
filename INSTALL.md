@@ -44,8 +44,8 @@ or https://docs.docker.com/v17.12/install/linux/docker-ce/ubuntu/
 `chmod 600 docker/acme.json`
 ### set up config
 - `cp loki_template.ini loki.ini`
-### get your PUBKEY
-- replace PUBKEY with your key and run `echo "PUBKEY=true" >> loki.ini`
+### get your session ID 
+- replace PUBKEY with your Session ID and run `echo "PUBKEY=true" >> loki.ini`
 ### start it
 Replace `your@email.tld` with your email address and `yourssl.domain.tld` with your public facing hostname. These are required for getting an SSL certification from LetsEncrypt which we will attempt to automatically do for you.
 
