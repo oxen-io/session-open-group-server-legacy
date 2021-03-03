@@ -6,6 +6,7 @@ const assert    = require('assert');
 const libloki_crypt = require('../../../dialects/transport/lib.loki_crypt');
 const util       = require('util');
 const textEncoder = new util.TextEncoder();
+const FormData    = require('form-data');
 
 const IV_LENGTH = 16;
 
@@ -103,6 +104,57 @@ const testLsrpc = async (payloadObj, testInfo) => {
   const obj = JSON.parse(decryptedJSON)
   assert.equal(200, obj.status);
   return obj;
+}
+
+const testLsrpcV2 = async (payloadObj, testInfo, v = '2') => {
+  const ephemeralKey = libsignal.curve.generateKeyPair();
+  const symKey = libloki_crypt.makeSymmetricKey(
+    ephemeralKey.privKey, // our privkey
+    OpenServerPubKey, // server's pubkey
+  );
+
+  const payloadData1 = textEncoder.encode(JSON.stringify(payloadObj));
+  // payload needs to be JSON encoded...
+  const cipherTextBuf = libloki_crypt.encryptGCM(symKey, payloadData1);
+
+  // first 4 bytes length
+  // 4 to len + 4 is binary
+  // then the json appended
+  // fileUpload
+
+  // has to be JSON gcm'd
+  const lenBuf = Buffer.allocUnsafe(4);
+  lenBuf.writeUInt32LE(cipherTextBuf.byteLength, 0);
+
+  // ephemeral_key has to be here...
+  const body = Buffer.from(JSON.stringify({
+    ephemeral_key: bb.wrap(ephemeralKey.pubKey).toString('hex'),
+  }), 'utf-8')
+
+  const payloadData = Buffer.concat([lenBuf, cipherTextBuf, body])
+
+  const result = await testInfo.overlayApi.serverRequest('loki/v' + v + '/lsrpc', {
+    method: 'POST',
+    rawBody: payloadData,
+    noJson: true,
+    //binary: true,
+  });
+
+  assert.equal(200, result.statusCode);
+  assert.ok(result.response);
+
+  const nonceCiphertextAndTag = Buffer.from(
+    bb.wrap(result.response, 'base64').toArrayBuffer()
+  );
+  const decryptedJSON = libloki_crypt.decryptGCM(symKey, nonceCiphertextAndTag);
+  //console.log('decryptedJSON', decryptedJSON)
+  const obj = JSON.parse(decryptedJSON)
+  assert.equal(200, obj.status);
+  return obj;
+}
+
+const testLsrpcV3 = async (payloadObj, testInfo) => {
+  return testLsrpcV2(payloadObj, testInfo, 3)
 }
 
 module.exports = (testInfo) => {
@@ -328,6 +380,8 @@ module.exports = (testInfo) => {
       };
       // will auto test the response enough
       await testLsrpc(submitChalPayloadObj, testInfo);
+      // set token...
+      testInfo.overlayApi.token = token
     });
     it('lsrpc missing header', async function() {
       const payloadObj = {
@@ -365,4 +419,246 @@ module.exports = (testInfo) => {
       assert.ok(resp.body);
     });
   });
+
+  describe('onion request tests v2', function() {
+    it('lsrpc time v2', async function() {
+      const payloadObj = {
+        body: {}, // might need to b64 if binary...
+        endpoint: 'loki/v1/time',
+        method: 'GET',
+        headers: {},
+      };
+      const resp = await testLsrpcV2(payloadObj, testInfo);
+      assert.ok(resp.body);
+    });
+    // carry this data over...
+    let obj, readStream
+    it('lsrpc rpc 10mb file upload v2', async function() {
+      readStream = Buffer.from('0'.repeat((10 * 1024 * 1024) - 1))
+      const formData = new FormData();
+      formData.append('type', 'network.loki');
+      formData.append('content', readStream, {
+        contentType: 'text/plain',
+        name: 'content',
+        filename: 'foo.txt',
+      });
+      // formData => data => rawBody => fetchOptions.body => payloadObj.body
+      const fData = formData.getBuffer();
+      const fHeaders = formData.getHeaders();
+
+      let payloadObj = {
+        endpoint: 'files',
+        method: 'POST',
+        // don't set application/json on fup
+        body: {
+          fileUpload: fData.toString('base64')
+        },
+        headers: fHeaders
+      };
+      const res = await testLsrpcV2(payloadObj, testInfo);
+      assert.equal(res.status, 200)
+      obj = JSON.parse(res.body)
+      assert.equal(obj.meta.code, 200)
+      assert.ok(obj.data.id)
+      assert.ok(obj.data.url)
+    })
+    it('lsrpc rpc 10mb file download v2', async function() {
+
+      // obj.data.url
+      const endpoint = new URL(obj.data.url).pathname
+
+      payloadObj = {
+        endpoint: 'loki/v1' + endpoint,
+        method: 'GET',
+        noJson: true,
+      };
+      res = await testLsrpcV2(payloadObj, testInfo);
+      assert.equal(res.status, 200)
+      assert.ok(res.body)
+      assert.ok(res.headers)
+
+      const download = Buffer.from(res.body.data)
+
+      // make sure all bytes match what we uploaded
+      const compareTest = Buffer.compare(download, readStream)
+      assert.equal(0, compareTest)
+    })
+    it('lsrpc rpc 1 byte file upload v2', async function() {
+      readStream = Buffer.from('0')
+      const formData = new FormData();
+      formData.append('type', 'network.loki');
+      formData.append('content', readStream, {
+        contentType: 'text/plain',
+        name: 'content',
+        filename: 'foo.txt',
+      });
+      // formData => data => rawBody => fetchOptions.body => payloadObj.body
+      const fData = formData.getBuffer();
+      const fHeaders = formData.getHeaders();
+
+      let payloadObj = {
+        endpoint: 'files',
+        method: 'POST',
+        // don't set application/json on fup
+        body: {
+          fileUpload: fData.toString('base64')
+        },
+        headers: fHeaders
+      };
+      const res = await testLsrpcV2(payloadObj, testInfo);
+      assert.equal(res.status, 200)
+      obj = JSON.parse(res.body)
+      assert.equal(obj.meta.code, 200)
+      assert.ok(obj.data.id)
+      assert.ok(obj.data.url)
+    })
+    it('lsrpc rpc 1 byte file download v2', async function() {
+
+      // obj.data.url
+      const endpoint = new URL(obj.data.url).pathname
+
+      payloadObj = {
+        endpoint: 'loki/v1' + endpoint,
+        method: 'GET',
+        noJson: true,
+      };
+      res = await testLsrpcV2(payloadObj, testInfo);
+      // res has body, headers, status
+      assert.equal(res.status, 200)
+      assert.ok(res.body)
+      assert.ok(res.headers)
+
+      const download = Buffer.from(res.body, 'base64')
+      //console.log('download', download)
+
+      // make sure all bytes match what we uploaded
+      const compareTest = Buffer.compare(download, readStream)
+      assert.equal(0, compareTest)
+
+      //console.log('out', res.body.toString())
+    })
+  })
+
+  describe('onion request tests v3', function() {
+    it('lsrpc time v3', async function() {
+      const payloadObj = {
+        body: {}, // might need to b64 if binary...
+        endpoint: 'loki/v1/time',
+        method: 'GET',
+        headers: {},
+      };
+      const resp = await testLsrpcV3(payloadObj, testInfo);
+      assert.ok(resp.body);
+    });
+    // carry this data over...
+    let obj, readStream
+    it('lsrpc rpc 10mb file upload v3', async function() {
+      readStream = Buffer.from('0'.repeat((10 * 1024 * 1024) - 1))
+      const formData = new FormData();
+      formData.append('type', 'network.loki');
+      formData.append('content', readStream, {
+        contentType: 'text/plain',
+        name: 'content',
+        filename: 'foo.txt',
+      });
+      // formData => data => rawBody => fetchOptions.body => payloadObj.body
+      const fData = formData.getBuffer();
+      const fHeaders = formData.getHeaders();
+
+      let payloadObj = {
+        endpoint: 'files',
+        method: 'POST',
+        // don't set application/json on fup
+        body: {
+          fileUpload: fData.toString('base64')
+        },
+        headers: fHeaders
+      };
+      const res = await testLsrpcV3(payloadObj, testInfo);
+      assert.equal(res.status, 200)
+      obj = JSON.parse(res.body)
+      assert.equal(obj.meta.code, 200)
+      assert.ok(obj.data.id)
+      assert.ok(obj.data.url)
+    })
+    it('lsrpc rpc 10mb file download v3', async function() {
+
+      // obj.data.url
+      const endpoint = new URL(obj.data.url).pathname
+
+      payloadObj = {
+        endpoint: 'loki/v1' + endpoint,
+        method: 'GET',
+        noJson: true,
+      };
+      res = await testLsrpcV3(payloadObj, testInfo);
+      // res has body, headers, status
+      assert.equal(res.status, 200)
+      assert.ok(res.body)
+      assert.ok(res.headers)
+
+      const download = Buffer.from(res.body, 'base64')
+      //console.log('download', download)
+
+      // make sure all bytes match what we uploaded
+      const compareTest = Buffer.compare(download, readStream)
+      assert.equal(0, compareTest)
+
+      //console.log('out', res.body.toString())
+    })
+    it('lsrpc rpc 1 byte file upload v3', async function() {
+      readStream = Buffer.from('0')
+      const formData = new FormData();
+      formData.append('type', 'network.loki');
+      formData.append('content', readStream, {
+        contentType: 'text/plain',
+        name: 'content',
+        filename: 'foo.txt',
+      });
+      // formData => data => rawBody => fetchOptions.body => payloadObj.body
+      const fData = formData.getBuffer();
+      const fHeaders = formData.getHeaders();
+
+      let payloadObj = {
+        endpoint: 'files',
+        method: 'POST',
+        // don't set application/json on fup
+        body: {
+          fileUpload: fData.toString('base64')
+        },
+        headers: fHeaders
+      };
+      const res = await testLsrpcV3(payloadObj, testInfo);
+      assert.equal(res.status, 200)
+      obj = JSON.parse(res.body)
+      assert.equal(obj.meta.code, 200)
+      assert.ok(obj.data.id)
+      assert.ok(obj.data.url)
+    })
+    it('lsrpc rpc 1 byte file download v3', async function() {
+
+      // obj.data.url
+      const endpoint = new URL(obj.data.url).pathname
+
+      payloadObj = {
+        endpoint: 'loki/v1' + endpoint,
+        method: 'GET',
+        noJson: true,
+      };
+      res = await testLsrpcV3(payloadObj, testInfo);
+      // res has body, headers, status
+      assert.equal(res.status, 200)
+      assert.ok(res.body)
+      assert.ok(res.headers)
+
+      const download = Buffer.from(res.body, 'base64')
+      //console.log('download', download)
+
+      // make sure all bytes match what we uploaded
+      const compareTest = Buffer.compare(download, readStream)
+      assert.equal(0, compareTest)
+
+      //console.log('out', res.body.toString())
+    })
+  })
 }
