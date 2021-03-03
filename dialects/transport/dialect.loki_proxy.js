@@ -648,7 +648,7 @@ module.exports = (app, prefix) => {
       return resultBody;
     }
 
-    let bodyBase64 = bb.wrap(resultBody.buffer).toString('base64');
+    let bodyBase64 = bb.wrap(resultBody).toString('base64');
 
     return bodyBase64;
   }
@@ -739,7 +739,7 @@ module.exports = (app, prefix) => {
       }, res);
     }
 
-    
+
     const cipherText64 = req.body.ciphertext;
     // base64 decode cipherText64 into buffer
     const ciphertext = Buffer.from(
