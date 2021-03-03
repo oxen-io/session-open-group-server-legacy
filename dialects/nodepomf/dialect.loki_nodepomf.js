@@ -88,10 +88,10 @@ module.exports = (app, prefix) => {
   /// ************************************************
 
   app.use(prefix + '/loki/v1/f/:file', function(req, res) {
-    const safePath = req.params.file.replace(/[\.\/]/g, '');
+    const safePath = req.params.file.replace(/\.\.\//g, '');
 
     try {
-      const buf = fs.readFileSync('files/' + safePath);
+      const buf = fs.readFileSync(fileUploadPath + '/' + safePath);
 
       /// NOTE: attachments in private conversations are saved under
       /// `/root/nodepomf/files/` (not in `files/` relative to current dir)
