@@ -475,6 +475,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       it('create message to test with', async function() {
         // well we need to create a new message for moderation test
         // we do the asserts inside create_message
+        //console.log('using', platformApi.token)
         messageId = await create_message(channelId);
         messageId1 = await create_message(channelId);
         messageId2 = await create_message(channelId);
@@ -501,6 +502,8 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       it('user multi delete test', async function () {
         //let message = await get_message(messageId);
         if (messageId3 && messageId4) {
+          // not sure how our token becomes a buffer...
+          overlayApi.token = tokenString
           const result = await overlayApi.serverRequest('loki/v1/messages', {
             method: 'DELETE',
             params: {
