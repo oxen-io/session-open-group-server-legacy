@@ -63,9 +63,9 @@
     }
   },
   "limits": {
-    "defaults": {
+    "default": {
       "following": "unlimited",
-      "max_file_size": 10000000,
+      "max_file_size": 10485759,
       "storage": 0
     }
   }

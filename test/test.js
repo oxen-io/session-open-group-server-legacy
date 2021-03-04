@@ -9,6 +9,7 @@ const libsignal    = require('libsignal');
 const adnServerAPI = require('../server/fetchWrapper.js');
 const loki_crypt   = require('../lib.loki_crypt');
 const config       = require('../lib.config.js');
+const loki_middlewares = require('../middlewares.js');
 
 
 const ADN_SCOPES = 'basic stream write_post follow messages update_profile files export';
@@ -100,10 +101,17 @@ const ensureUnifiedServer = () => {
       //console.log(webbind + ':' + webport, 'free', free);
 
       if (free) {
+        console.log('starting unified server');
         // make sure we use the same config...
         process.env['admin:modKey'] = 'JustMakingSureThisIsEnabled';
         hasAdminAPI = true;
         startPlatform = require('../server/app');
+        //
+        startPlatform.publicApp.use(loki_middlewares.snodeOnionMiddleware);
+        // Express 4.x specific
+        // position it to spot 2
+        startPlatform.publicApp._router.stack.splice(2, 0, startPlatform.publicApp._router.stack.splice(startPlatform.publicApp._router.stack.length - 1, 1)[0]);
+
         weStartedUnifiedServer = true;
       } else {
         console.log('detected running unified server, testing that');
@@ -467,6 +475,7 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       it('create message to test with', async function() {
         // well we need to create a new message for moderation test
         // we do the asserts inside create_message
+        //console.log('using', platformApi.token)
         messageId = await create_message(channelId);
         messageId1 = await create_message(channelId);
         messageId2 = await create_message(channelId);
@@ -493,6 +502,8 @@ const runIntegrationTests = async (ourKey, ourPubKeyHex) => {
       it('user multi delete test', async function () {
         //let message = await get_message(messageId);
         if (messageId3 && messageId4) {
+          // not sure how our token becomes a buffer...
+          overlayApi.token = tokenString
           const result = await overlayApi.serverRequest('loki/v1/messages', {
             method: 'DELETE',
             params: {
