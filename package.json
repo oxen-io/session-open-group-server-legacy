@@ -14,7 +14,7 @@
     "libsignal": "^2.0.1",
     "loki-launcher": "^1.0.0",
     "mysql": "^2.17.1",
-    "nconf": "^0.10.0",
+    "nconf": "^0.11.4",
     "node-fetch": "^2.6.1",
     "request": "^2.88.0",
     "run-middleware": "^0.9.10"
