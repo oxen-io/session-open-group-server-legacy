@@ -1,3 +1,7 @@
+# THIS REPOSITORY HAS BEEN DEPRECATED THE NEW SESSION OPEN GROUP SERVER CAN BE FOUND [HERE](https://github.com/oxen-io/session-pysogs)
+
+https://github.com/oxen-io/session-pysogs
+
 # Session Open Group Server
 Session Open Group Server (previously Loki messenger public chat server)
 
